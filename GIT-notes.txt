@@ -1,0 +1,88 @@
+================================================================================
+              MASTER GIT & HYBRID MONOREPO CHEAT SHEET
+================================================================================
+
+1. MASTER MONOREPO FOLDER STRUCTURE
+--------------------------------------------------------------------------------
+developer-learning/
+├── 01-html-css-bootstrap/
+├── 02-tailwind-css/
+├── 03-react-masterclass/
+│   └── 03-bookmyshow-clone/       <-- Active React Project
+├── 04-android-development/
+└── GIT-notes.txt
+
+
+2. FOLDER SETUP & NAVIGATION COMMANDS
+--------------------------------------------------------------------------------
+# Create initial master folder structure:
+mkdir -p ~/projects/developer-learning/{01-html-css-bootstrap,02-tailwind-css,03-react-masterclass/03-bookmyshow-clone,04-android-development}
+
+# Quick Navigation Shortcuts:
+cd ~/projects/developer-learning                                # Monorepo Root
+cd ~/projects/developer-learning/03-react-masterclass/03-bookmyshow-clone # React Project
+cd ~/projects/developer-learning/04-android-development        # Android Project
+cd ..                                                           # Move Up 1 Folder
+
+
+3. MOVING & SPINNING OFF PROJECTS
+--------------------------------------------------------------------------------
+# Move existing code into Monorepo:
+cp -r ~/projects/react-learning/* ~/projects/developer-learning/03-react-masterclass/03-bookmyshow-clone/
+
+# Spin off completed project to standalone repo for portfolio/deployment:
+mkdir ~/projects/react-bookmyshow-clone
+cp -r ~/projects/developer-learning/03-react-masterclass/03-bookmyshow-clone/* ~/projects/react-bookmyshow-clone/
+cd ~/projects/react-bookmyshow-clone
+git init
+git branch -M main
+git add .
+git commit -m "feat: initial release of BookMyShow SPA clone"
+git remote add origin https://github.com/YOUR_USERNAME/react-bookmyshow-clone.git
+git push -u origin main
+
+
+4. CONVENTIONAL COMMITS & DAILY WORKFLOW
+--------------------------------------------------------------------------------
+# Syntax: git commit -m "type(scope): description"
+# Types: feat (feature), fix (bug fix), refactor (cleanup), docs (notes/readme)
+
+# Standard Daily Workflow:
+git add .
+git commit -m "feat(react/bookmyshow): integrate Step 32 performance optimizations"
+git push origin main
+
+
+5. GIT BRANCHING & EXPERIMENTAL SANDBOX
+--------------------------------------------------------------------------------
+# Create and switch to a new isolated feature/experiment branch:
+git switch -c experiment/tailwind-redesign
+
+# View active branches (asterisk * marks current branch):
+git branch
+
+# Switch back to main branch:
+git switch main
+
+# Merge complete experiment branch into main:
+git switch main
+git merge experiment/tailwind-redesign
+
+# Delete temporary branch after merging:
+git branch -d experiment/tailwind-redesign
+
+
+6. PULL, ROLLBACK & REVERT COMMANDS
+--------------------------------------------------------------------------------
+git status                                # Check modified/unstaged files
+git log --oneline -n 10                  # View last 10 commits in clean 1-line format
+git pull origin main                      # Fetch and merge latest remote changes
+
+# Reverting Edits & Commits:
+git restore <file>                        # Discard uncommitted edits in a specific file
+git restore .                             # Discard ALL uncommitted local edits
+git restore --staged <file>               # Unstage file (keep code in editor)
+git reset --soft HEAD~1                   # Undo last commit, keep changes staged
+git reset --hard <COMMIT_HASH>            # Destructive: Force revert to specific past commit
+
+================================================================================
