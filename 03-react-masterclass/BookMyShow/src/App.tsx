@@ -1,5 +1,6 @@
-import React, { createContext, useContext, useReducer, useEffect, useState, useMemo } from "react";
+import { createContext, useContext, useReducer, useEffect, useState, useMemo, useCallback } from "react";
 import { BrowserRouter, Routes, Route, Link, Outlet, useParams } from "react-router-dom";
+import { MovieCard } from "./components/MovieCard";
 
 interface Movie { id: string; title: string; genre: string; }
 interface MovieState { movies: Movie[]; favorites: string[]; loading: boolean; searchQuery: string; }
@@ -61,14 +62,21 @@ const Home = () => {
   const favorites = context?.state.favorites || [];
   const searchQuery = context?.state.searchQuery || "";
   const isLoading = context?.state.loading || false;
+  const dispatch = context?.dispatch;
 
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     context?.dispatch({ type: "SET_SEARCH_QUERY", payload: e.target.value });
   }
 
+  const handleToggleFavorite = useCallback((id: string) => {
+    const isFav = favorites.includes(id);
+    dispatch?.({ type: isFav ? "REMOVE_FAVORITE" : "ADD_FAVORITE", payload: id });
+  }, [favorites, dispatch]);
+
   const filteredMovies = useMemo(() => {
     return movies.filter(movie =>
-      movie.title.toLowerCase().includes(searchQuery.toLowerCase()) || movie.genre.toLowerCase().includes(searchQuery.toLowerCase())
+      movie.title.toLowerCase().includes(searchQuery.toLowerCase()) || 
+      movie.genre.toLowerCase().includes(searchQuery.toLowerCase())
     );
   }, [movies, searchQuery]);
 
@@ -104,37 +112,14 @@ const Home = () => {
         </div>
       ) : (        
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-          {filteredMovies.map(movie => {
-            const isFavorite = favorites.includes(movie.id);
-            return (
-              <div key={movie.id} className="bg-slate-800/50 border border-slate-700/60 rounded-2xl p-5 flex flex-col justify-between hover:border-slate-600 transition-all shadow-lg">
-                <div>
-                  <span className="text-[10px] uppercase tracking-widest text-rose-400 font-bold px-2.5 py-1 bg-rose-500/10 rounded-md border border-rose-500/20">
-                    {movie.genre}
-                  </span>
-                  <h3 className="text-lg font-bold mt-3 text-slate-100">{movie.title}</h3>
-                </div>
-                <div className="mt-6 flex items-center justify-between pt-4 border-t border-slate-700/50">
-                  <Link 
-                    to={`/movie/${movie.id}`} 
-                    className="text-xs font-semibold bg-slate-700 hover:bg-slate-600 text-slate-200 px-3.5 py-2 rounded-xl transition-colors"
-                  >
-                    View Details
-                  </Link>
-                  <button 
-                    onClick={() => context?.dispatch({ type: isFavorite ? "REMOVE_FAVORITE" : "ADD_FAVORITE", payload: movie.id })}
-                    className={`text-xs px-3.5 py-2 rounded-xl font-semibold transition-colors ${
-                      isFavorite 
-                        ? 'bg-rose-600 text-white hover:bg-rose-700 shadow-rose-900/30' 
-                        : 'bg-slate-700 hover:bg-slate-600 text-slate-200'
-                    }`}
-                  >
-                    {isFavorite ? "❤️ Favorited" : "🤍 Favorite"}
-                  </button>
-                </div>
-              </div>
-            );
-          })}        
+          {filteredMovies.map(movie => (
+            <MovieCard 
+              key={movie.id} 
+              movie={movie} 
+              isFavorite={favorites.includes(movie.id)} 
+              onToggleFavorite={handleToggleFavorite} 
+            />
+          ))}       
         </div>
       )}
     </div>
@@ -145,8 +130,17 @@ const Favorites = () => {
   const context = useContext(MovieContext);
   const favoriteIDs = context?.state.favorites || [];
   const allmovies = context?.state.movies || [];
+  const dispatch = context?.dispatch;
 
-  const favoriteMovies = allmovies.filter(movie => favoriteIDs.includes(movie.id));
+  // const favoriteMovies = allmovies.filter(movie => favoriteIDs.includes(movie.id));
+
+  const favoriteMovies = useMemo(() => {
+    return allmovies.filter(movie => favoriteIDs.includes(movie.id));
+  }, [allmovies, favoriteIDs]);
+
+  const handleRemoveFavorite = useCallback((id: string) => {
+    dispatch?.({ type: "REMOVE_FAVORITE", payload: id });
+  }, [dispatch]);
 
   return (
     <div>
@@ -164,30 +158,14 @@ const Favorites = () => {
         </div>
       ) : (        
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-          {favoriteMovies.map((movie => (
-            <div key={movie.id} className="bg-slate-800/50 border border-slate-700/60 rounded-2xl p-5 flex flex-col justify-between shadow-lg">
-              <div>
-                <span className="text-[10px] uppercase tracking-widest text-rose-400 font-bold px-2.5 py-1 bg-rose-500/10 rounded-md border border-rose-500/20">
-                  {movie.genre}
-                </span>
-                <h3 className="text-lg font-bold mt-3 text-slate-100">{movie.title}</h3>
-              </div>
-              <div className="mt-6 flex items-center justify-between pt-4 border-t border-slate-700/50">
-                <Link 
-                  to={`/movie/${movie.id}`} 
-                  className="text-xs font-semibold bg-slate-700 hover:bg-slate-600 text-slate-200 px-3.5 py-2 rounded-xl transition-colors"
-                >
-                  View Details
-                </Link>
-                <button 
-                  onClick={() => context?.dispatch({ type: "REMOVE_FAVORITE", payload: movie.id })}
-                  className="text-xs px-3.5 py-2 rounded-xl font-semibold bg-rose-600/20 text-rose-400 hover:bg-rose-600 hover:text-white transition-colors"
-                >
-                  Remove
-                </button>
-              </div>
-            </div>
-          )))}
+          {favoriteMovies.map(movie => (
+            <MovieCard 
+              key={movie.id} 
+              movie={movie} 
+              isFavorite={true} 
+              onToggleFavorite={handleRemoveFavorite} 
+            />
+          ))}
         </div>
       )}
       
