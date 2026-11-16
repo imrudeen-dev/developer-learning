@@ -9,6 +9,7 @@ export default function RootLayout() {
       <StatusBar style="light" backgroundColor={BECHO_COLORS.surface} />
       <Stack screenOptions={{ headerShown: false }}>
         <Stack.Screen name="(tabs)" />
+        <Stack.Screen name="listing/[id]" />
       </Stack>
     </AuthProvider>
   );
