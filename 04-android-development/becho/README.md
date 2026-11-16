@@ -1,56 +1,72 @@
-# Welcome to your Expo app 👋
+# Becho — Local Buy, Sell & Rent Marketplace App
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+**Becho** is a full-stack OLX-style mobile marketplace built with **React Native (Expo Router)** and **Supabase**. Users can list items for **sale (`SELL`)** or **rent (`RENT`)** with multi-photo uploads, GPS locality detection, category & price filtering, real-time buyer–seller messaging, and full ad lifecycle management.
 
-## Get started
+## Core Features
 
-1. Install dependencies
+- **Authentication & Seller Profiles:** Email/password auth powered by Supabase Auth with automatic `profiles` provisioning via Postgres triggers and editable city/contact details.
+- **Dual Marketplace (`BUY` & `RENT`):**
+  - **Sell Ads:** Fixed-price listings across 10 categories (`Mobiles`, `Electronics`, `Vehicles`, `Property`, `Furniture`, `Bikes`, `Appliances`, `Fashion`, `Books & Sports`, `Tools & Gear`).
+  - **Rent Ads:** Flexible billing periods (`Per Day`, `Per Week`, `Per Month`) with optional refundable security deposits.
+- **Multi-Photo Upload & GPS Locality:** Upload up to 5 gallery photos per listing (`base64-arraybuffer` -> Supabase Storage `listing-images`) and auto-fill city/area using `expo-location` reverse geocoding.
+- **Discovery Feed & Search:** Two-column marketplace feed with `All` / `Buy` / `Rent` mode filters, category chips, keyword search, pull-to-refresh, and multi-photo detail carousel.
+- **Real-Time Buyer ↔ Seller Chat:** Live 1-on-1 listing threads powered by Supabase Realtime (`postgres_changes` on `public.messages`) plus a unified inbox grouped by listing and counterparty.
+- **My Ads Lifecycle Management:** Sellers can mark items as `SOLD` or `RENTED`, relist them as `ACTIVE`, or delete listings along with their stored images.
 
-   ```bash
-   npm install
-   ```
+## Tech Stack
 
-2. Start the app
+| Layer | Technology |
+|---|---|
+| **Mobile Framework** | React Native, Expo SDK, Expo Router (file-based navigation) |
+| **Language** | TypeScript |
+| **Backend & Auth** | Supabase (PostgreSQL, Row Level Security, Auth) |
+| **Storage & Realtime** | Supabase Storage (`listing-images`), Supabase Realtime channels |
+| **Device APIs** | `expo-image-picker`, `expo-location`, `@react-native-async-storage/async-storage` |
 
-   ```bash
-   npx expo start
-   ```
+## Project Structure
 
-In the output, you'll find options to open the app in a
-
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
-
-You can start developing by editing the files inside the **src/app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
-
-## Get a fresh project
-
-When you're ready, run:
-
-```bash
-npm run reset-project
+```text
+becho/
+├── src/
+│   ├── app/
+│   │   ├── _layout.tsx              # Root Stack + AuthProvider
+│   │   ├── (tabs)/
+│   │   │   ├── _layout.tsx          # 4-Tab Navigator (Home, Post Ad, Chats, Profile)
+│   │   │   ├── index.tsx            # Marketplace Feed (All/Buy/Rent, Search, Categories)
+│   │   │   ├── post.tsx             # Post Ad (SELL/RENT, Photos, GPS Location)
+│   │   │   ├── chats.tsx            # Buyer/Seller Conversations Inbox
+│   │   │   └── profile.tsx          # Auth, Seller Profile & My Ads Management
+│   │   ├── listing/[id].tsx         # Listing Detail + Photo Carousel + Chat CTA
+│   │   └── chat/[listingId].tsx     # Real-Time 1-on-1 Chat Thread
+│   └── lib/
+│       ├── auth-context.tsx         # Global Session & UserProfile Provider
+│       ├── constants.ts             # Categories & Rental Billing Periods
+│       ├── listings.ts              # Listing Types, INR & Relative Time Formatters
+│       ├── supabase.ts              # SSR-Safe Supabase Client
+│       └── theme.ts                 # Dark Slate & Emerald Design Tokens
+├── .env                             # Local environment secrets (Git-ignored)
+└── package.json
 ```
 
-This command will move the starter code to the **example** directory and create a blank **src/app** directory where you can start developing.
+## Local Setup
 
-### Other setup steps
+### 1. Prerequisites
+- Node.js 18+ and npm
+- Expo Go app installed on Android or iOS
 
-- To set up ESLint for linting, run `npx expo lint`, or follow our guide on ["Using ESLint and Prettier"](https://docs.expo.dev/guides/using-eslint/)
-- If you'd like to set up unit testing, follow our guide on ["Unit Testing with Jest"](https://docs.expo.dev/develop/unit-testing/)
-- Learn more about the TypeScript setup in this template in our guide on ["Using TypeScript"](https://docs.expo.dev/guides/typescript/)
+### 2. Environment Variables
+Create a `.env` file in the `becho/` root directory:
 
-## Learn more
+```env
+EXPO_PUBLIC_SUPABASE_URL=https://your-project-id.supabase.co
+EXPO_PUBLIC_SUPABASE_ANON_KEY=your-supabase-publishable-or-anon-key
+```
 
-To learn more about developing your project with Expo, look at the following resources:
+### 3. Install & Run
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
+```bash
+npm install
+npx expo start --tunnel
+```
 
-## Join the community
-
-Join our community of developers creating universal apps.
-
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+Scan the QR code with **Expo Go** to launch the app on your device.
