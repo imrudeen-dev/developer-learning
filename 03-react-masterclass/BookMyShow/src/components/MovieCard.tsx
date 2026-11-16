@@ -1,3 +1,31 @@
+import React from "react"
+import { Link } from "react-router-dom";
+
+interface MovieCardProps {
+  movie: { id: string; title: string; genre: string };
+  isFavorite: boolean;
+  onToggleFavorite: (id: string) => void;
+  onRemoveFavorite: (id: string) => void;
+  isFavoritePage: boolean;
+}
+
+export const MovieCard = React.memo(({ movie, isFavorite, onToggleFavorite }: MovieCardProps) => {
+  return (
+    <div>
+      <span>{movie.genre}</span>
+      <h3>{movie.title}</h3>
+      <div>
+        <Link to={`/movie/${movie.id}`}>View Details</Link>
+        <button onClick={() => onToggleFavorite(movie.id)}>{isFavorite ? "Favorited" : "Favorite"}</button>
+      </div>
+    </div>
+  );
+});
+
+MovieCard.displayName = "MovieCard";
+
+/*
+
 import React from "react";
 import { Link } from "react-router-dom";
 
@@ -7,7 +35,7 @@ interface MovieCardProps {
   onToggleFavorite: (id: string) => void;
   onRemoveFavorite?: (id: string) => void;
   isFavoritePage?: boolean;
-}
+} 
 
 export const MovieCard = React.memo(({ movie, isFavorite, onToggleFavorite }: MovieCardProps) => {
   return (
@@ -41,3 +69,5 @@ export const MovieCard = React.memo(({ movie, isFavorite, onToggleFavorite }: Mo
 });
 
 MovieCard.displayName = "MovieCard";
+
+*/

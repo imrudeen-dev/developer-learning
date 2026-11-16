@@ -1,3 +1,175 @@
+import React, { createContext, useContext, useReducer, useState, useEffect, useMemo, useCallback } from "react";
+import { BrowserRouter, Routes, Link, Outlet, useParams, Route } from "react-router-dom";
+import { MovieCard } from "./components/MovieCard";
+
+interface Movie { id: string; title: string; genre: string }
+interface MovieState { movies: Movie[]; favorites: string[]; loading: boolean; searchQuery: string }
+type MovieAction = 
+  | { type: "SET_MOVIES", payload: Movie[] }
+  | { type: "ADD_FAVORITE", payload: string }
+  | { type: "REMOVE_FAVORITE", payload: string }
+  | { type: "SET_LOADING", payload: boolean }
+  | { type: "SET_SEARCH_QUERY", payload: string };
+interface MovieContextType { state: MovieState, dispatch: React.Dispatch<MovieAction> }
+
+const MovieContext = createContext<MovieContextType | undefined>(undefined);
+
+const MovieReducer = (state: MovieState, action: MovieAction): MovieState => {
+  switch (action.type) {
+    case "SET_MOVIES":
+      return { ...state, movies: action.payload };
+    case "ADD_FAVORITE":
+      if (state.favorites.includes(action.payload)) return state;
+      return { ...state, favorites: [...state.favorites, action.payload] };
+    case "REMOVE_FAVORITE":
+      return { ...state, favorites: state.favorites.filter( id => id != action.payload) };
+    case "SET_LOADING":
+      return { ...state, loading: action.payload };
+    case "SET_SEARCH_QUERY":
+      return { ...state, searchQuery: action.payload };
+    default:
+      return state;
+  }
+};
+
+const Layout = () => {
+  const context = useContext(MovieContext);
+  const favoritesCount = context?.state.favorites.length || 0;
+
+  return (
+    <div>
+      <nav>
+        <h2>BookMyShow</h2>
+        <div>
+          <Link to="/">Home</Link>
+          <Link to="/favorite">Favorites :{favoritesCount}</Link>
+        </div>
+      </nav>
+      <Outlet />
+    </div>
+  );
+}
+
+const Home = () => {
+  const context = useContext(MovieContext);
+  const movies = context?.state.movies || [];
+  const favorites = context?.state.favorites || [];
+  const isLoading = context?.state.loading || false;
+  const searchQuery = context?.state.searchQuery || "";  
+  const dispatch = context?.dispatch;
+
+  const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    dispatch?.({ type: "SET_SEARCH_QUERY", payload: e.target.value });
+  };
+  const handleToggleFavorite = useCallback((id: string) => {
+    const isFav = favorites.includes(id);
+    dispatch?.({ type: isFav ? "REMOVE_FAVORITE" : "ADD_FAVORITE", payload: id });
+  }, [favorites, dispatch]);
+
+  const filteredMovies = useMemo(() => {
+    return movies.filter(movie => 
+      movie.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      movie.genre.toLowerCase().includes(searchQuery.toLowerCase())
+    )
+  }, [movies, searchQuery]);
+
+  if (isLoading) {
+    return (
+      <p>Loading movies from server...</p>
+    );
+  }
+
+  return (
+    <div>
+      <h3>Feature Movies</h3>
+      <input type="text" placeholder="Search movies..." value={searchQuery} onChange={handleSearchChange} />
+      {filteredMovies.length === 0 ? (
+        <p>No movies found matching: "{searchQuery}"</p>
+      ) : (
+      <ul>
+        {filteredMovies.map(movie => (
+          <li>
+            <MovieCard key={movie.id} movie={movie} isFavorite={favorites.includes(movie.id)} onToggleFavorite={handleToggleFavorite} />
+          </li>
+        ))}
+      </ul>
+      )}
+    </div>
+  );
+}
+
+function useLocalStorage<T>(key: string, initialValue: T): [T, (Value: T | ((val:T) => T)) => void] {
+  const [storedValue, setStoredValue] = useState<T>(() => {
+    try {
+      const item = window.localStorage.getItem(key);
+      return item ? JSON.parse(item) : initialValue;
+    } catch (error) {
+      console.error(error);
+      return initialValue;
+    }
+  });
+
+  const setValue = (value: T | ((val: T) => T)) => {
+    try {
+      const valueToStore = value instanceof Function ? value(storedValue) : value;
+      setStoredValue(valueToStore);
+      window.localStorage.setItem(key, JSON.stringify(valueToStore));
+    } catch (error) {
+      console.error(error);
+    }
+  };
+
+  return [storedValue, setValue];
+}
+
+function App() {
+  const [savedFavorites, setSavedFavorites] = useLocalStorage<string[]>("bookmyshow_favorites", []);
+  const getInitialState = (): MovieState => ({
+    movies: [], favorites: savedFavorites, loading: true, searchQuery: ""
+  });
+  const [state, dispatch] = useReducer(MovieReducer, null, getInitialState );
+
+  useEffect(() => {
+    setSavedFavorites(state.favorites);
+  }, [state.favorites, setSavedFavorites]);
+
+  useEffect(() => {
+    const fetchMovies = async () => {
+      try {
+        const mockData: Movie[] = [
+          { id: "1", title: "Vikram", genre: "Thriller" },
+          { id: "2", title: "Leo", genre: "Action" },
+          { id: "3", title: "Master", genre: "Drama" },
+        ];
+        dispatch?.({ type: "SET_MOVIES", payload: mockData });
+        dispatch?.({ type: "SET_LOADING", payload: false });
+      } catch (error) {
+        console.error(error);
+        dispatch?.({ type: "SET_LOADING", payload: false });
+      }
+    }
+
+    fetchMovies();
+  }, []);
+
+  return (
+    <MovieContext.Provider value={{state, dispatch}}>
+      <BrowserRouter>
+        <Routes>
+          <Route path="/" element={<Layout />}>
+            <Route index element={<Home />} />
+          </Route>
+        </Routes>
+      </BrowserRouter>
+    </MovieContext.Provider>
+  );
+}
+
+export default App;
+
+
+/* 
+
 import { createContext, useContext, useReducer, useEffect, useState, useMemo, useCallback } from "react";
 import { BrowserRouter, Routes, Route, Link, Outlet, useParams } from "react-router-dom";
 import { MovieCard } from "./components/MovieCard";
@@ -306,3 +478,5 @@ function App() {
 }
 
 export default App;
+
+*/
