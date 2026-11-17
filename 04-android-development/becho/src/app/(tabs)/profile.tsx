@@ -1,23 +1,32 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useEffect, useState } from 'react';
+import * as Haptics from 'expo-haptics';
+import { useFocusEffect, useRouter } from 'expo-router';
+import { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Image,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
   StyleSheet,
   Text,
   TextInput,
-  TouchableOpacity,
   View,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { BechoLogoMark, HapticButton, ScreenHeader } from '../../components/NativeUI';
 import { useAuth } from '../../lib/auth-context';
+import { Listing, formatListingPrice } from '../../lib/listings';
 import { supabase } from '../../lib/supabase';
-import { BECHO_COLORS } from '../../lib/theme';
+import { BECHO_THEMES, ThemeId, getCardElevation, useBechoTheme } from '../../lib/theme';
 
 export default function ProfileScreen() {
   const { user, profile, loading, refreshProfile } = useAuth();
+  const { theme, themeId, setThemeId } = useBechoTheme();
+  const insets = useSafeAreaInsets();
+  const router = useRouter();
+  const c = theme.colors;
 
   // Auth form state
   const [isSignUp, setIsSignUp] = useState(false);
@@ -32,6 +41,11 @@ export default function ProfileScreen() {
   const [editCity, setEditCity] = useState('Chennai');
   const [savingProfile, setSavingProfile] = useState(false);
 
+  // My Ads state
+  const [myListings, setMyListings] = useState<Listing[]>([]);
+  const [loadingAds, setLoadingAds] = useState(false);
+  const [busyAdId, setBusyAdId] = useState<string | null>(null);
+
   useEffect(() => {
     if (profile) {
       setEditName(profile.full_name ?? '');
@@ -39,6 +53,34 @@ export default function ProfileScreen() {
       setEditCity(profile.city ?? 'Chennai');
     }
   }, [profile]);
+
+  const loadMyListings = useCallback(async () => {
+    if (!user) {
+      setMyListings([]);
+      return;
+    }
+    setLoadingAds(true);
+    try {
+      const { data, error } = await supabase
+        .from('listings')
+        .select('*')
+        .eq('seller_id', user.id)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      setMyListings((data as Listing[]) ?? []);
+    } catch (err) {
+      console.error('[Becho] Failed to fetch user listings:', err);
+    } finally {
+      setLoadingAds(false);
+    }
+  }, [user]);
+
+  useFocusEffect(
+    useCallback(() => {
+      loadMyListings();
+    }, [loadMyListings])
+  );
 
   const handleAuth = async () => {
     if (!email.trim() || !password.trim()) {
@@ -61,6 +103,7 @@ export default function ProfileScreen() {
           },
         });
         if (error) throw error;
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
         Alert.alert('Welcome to Becho!', 'Your account has been created.');
       } else {
         const { error } = await supabase.auth.signInWithPassword({
@@ -68,8 +111,10 @@ export default function ProfileScreen() {
           password,
         });
         if (error) throw error;
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
       }
     } catch (err: any) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
       Alert.alert('Authentication Error', err.message ?? 'Something went wrong');
     } finally {
       setAuthSubmitting(false);
@@ -91,6 +136,7 @@ export default function ProfileScreen() {
 
       if (error) throw error;
       await refreshProfile();
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
       Alert.alert('Saved', 'Your profile details have been updated.');
     } catch (err: any) {
       Alert.alert('Update Failed', err.message ?? 'Could not update profile');
@@ -99,43 +145,217 @@ export default function ProfileScreen() {
     }
   };
 
+  const handleToggleAdStatus = async (item: Listing) => {
+    const nextStatus: Listing['status'] =
+      item.status === 'ACTIVE'
+        ? item.listing_type === 'RENT'
+          ? 'RENTED'
+          : 'SOLD'
+        : 'ACTIVE';
+
+    setBusyAdId(item.id);
+    try {
+      const { error } = await supabase
+        .from('listings')
+        .update({ status: nextStatus })
+        .eq('id', item.id);
+
+      if (error) throw error;
+      Haptics.selectionAsync().catch(() => {});
+      setMyListings((prev) =>
+        prev.map((ad) => (ad.id === item.id ? { ...ad, status: nextStatus } : ad))
+      );
+    } catch (err: any) {
+      Alert.alert('Status Update Failed', err.message ?? 'Could not update listing status');
+    } finally {
+      setBusyAdId(null);
+    }
+  };
+
+  const handleDeleteAd = (item: Listing) => {
+    Alert.alert(
+      'Delete Listing?',
+      `Remove "${item.title}" permanently? This cannot be undone.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            setBusyAdId(item.id);
+            try {
+              if (item.images && item.images.length > 0) {
+                const storagePaths = item.images
+                  .map((url) => url.split('/listing-images/')[1])
+                  .filter(Boolean);
+                if (storagePaths.length > 0) {
+                  await supabase.storage.from('listing-images').remove(storagePaths);
+                }
+              }
+
+              const { error } = await supabase.from('listings').delete().eq('id', item.id);
+              if (error) throw error;
+
+              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(() => {});
+              setMyListings((prev) => prev.filter((ad) => ad.id !== item.id));
+            } catch (err: any) {
+              Alert.alert('Delete Failed', err.message ?? 'Could not delete listing');
+            } finally {
+              setBusyAdId(null);
+            }
+          },
+        },
+      ]
+    );
+  };
+
   const handleSignOut = async () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
     await supabase.auth.signOut();
   };
 
+  const renderThemeCard = () => (
+    <View
+      style={[
+        styles.card,
+        {
+          backgroundColor: c.surface,
+          borderColor: c.border,
+          borderRadius: theme.radius.lg,
+          ...getCardElevation(theme),
+        },
+      ]}
+    >
+      <View style={[styles.rowBetween, { marginBottom: 12 }]}>
+        <View style={{ flex: 1 }}>
+          <Text style={[styles.sectionTitle, { color: c.text, marginBottom: 2 }]}>
+            Appearance & Theme
+          </Text>
+          <Text style={{ color: c.textMuted, fontSize: 12 }}>
+            Live Android surface & accent tokens
+          </Text>
+        </View>
+        <View
+          style={{
+            paddingHorizontal: 10,
+            paddingVertical: 4,
+            borderRadius: theme.radius.full,
+            backgroundColor: c.primaryMuted,
+          }}
+        >
+          <Text style={{ color: c.primary, fontSize: 11, fontWeight: '700' }}>
+            {theme.name}
+          </Text>
+        </View>
+      </View>
+
+      <View style={{ gap: 10 }}>
+        {(Object.keys(BECHO_THEMES) as ThemeId[]).map((id) => {
+          const item = BECHO_THEMES[id];
+          const active = themeId === id;
+          return (
+            <HapticButton
+              key={id}
+              hapticStyle="selection"
+              onPress={() => setThemeId(id)}
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                padding: 12,
+                borderRadius: theme.radius.md,
+                borderWidth: 1.5,
+                backgroundColor: active ? c.primaryMuted : c.surfaceElevated,
+                borderColor: active ? c.primary : c.border,
+              }}
+            >
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1 }}>
+                <View
+                  style={{
+                    width: 24,
+                    height: 24,
+                    borderRadius: 12,
+                    backgroundColor: item.colors.primary,
+                    borderWidth: 2,
+                    borderColor: item.colors.bg,
+                  }}
+                />
+                <View style={{ flex: 1 }}>
+                  <Text style={{ color: c.text, fontSize: 14, fontWeight: '700' }}>
+                    {item.name}
+                  </Text>
+                  <Text
+                    style={{ color: c.textMuted, fontSize: 11, marginTop: 1 }}
+                    numberOfLines={1}
+                  >
+                    {item.tagline}
+                  </Text>
+                </View>
+              </View>
+
+              <Ionicons
+                name={active ? 'checkmark-circle' : 'ellipse-outline'}
+                size={22}
+                color={active ? c.primary : c.textMuted}
+              />
+            </HapticButton>
+          );
+        })}
+      </View>
+    </View>
+  );
+
   if (loading) {
     return (
-      <View style={styles.centered}>
-        <ActivityIndicator size="large" color={BECHO_COLORS.primary} />
+      <View style={[styles.centered, { backgroundColor: c.bg }]}>
+        <ActivityIndicator size="large" color={c.primary} />
       </View>
     );
   }
 
-  // LOGGED-OUT VIEW: Sign In / Create Account
+  // LOGGED-OUT VIEW
   if (!user) {
     return (
       <KeyboardAvoidingView
-        style={{ flex: 1, backgroundColor: BECHO_COLORS.bg }}
+        style={{ flex: 1, backgroundColor: c.bg }}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
-        <ScrollView contentContainerStyle={styles.authContainer} keyboardShouldPersistTaps="handled">
-          <View style={styles.logoBadge}>
-            <Ionicons name="storefront-outline" size={34} color={BECHO_COLORS.primary} />
+        <ScreenHeader
+          title="Account"
+          subtitle="Sign in to post & manage ads"
+          leftAction={<BechoLogoMark size={34} />}
+        />
+        <ScrollView
+          contentContainerStyle={[
+            styles.authContainer,
+            { paddingBottom: 36 + insets.bottom },
+          ]}
+          keyboardShouldPersistTaps="handled"
+        >
+          <View style={{ alignItems: 'center', marginBottom: 16 }}>
+            <BechoLogoMark size={64} />
           </View>
-          <Text style={styles.brandTitle}>
+          <Text style={[styles.brandTitle, { color: c.text }]}>
             {isSignUp ? 'Create your Becho account' : 'Sign in to Becho'}
           </Text>
-          <Text style={styles.brandSub}>
+          <Text style={[styles.brandSub, { color: c.textMuted }]}>
             Buy, sell, and rent locally with instant chat.
           </Text>
 
           {isSignUp && (
             <View style={styles.fieldGroup}>
-              <Text style={styles.label}>Full Name</Text>
+              <Text style={[styles.label, { color: c.textMuted }]}>Full Name</Text>
               <TextInput
-                style={styles.input}
+                style={[
+                  styles.input,
+                  {
+                    backgroundColor: c.surfaceElevated,
+                    borderColor: c.border,
+                    color: c.text,
+                  },
+                ]}
                 placeholder="e.g. Imrudeen"
-                placeholderTextColor={BECHO_COLORS.textMuted}
+                placeholderTextColor={c.textMuted}
                 value={fullName}
                 onChangeText={setFullName}
               />
@@ -143,11 +363,18 @@ export default function ProfileScreen() {
           )}
 
           <View style={styles.fieldGroup}>
-            <Text style={styles.label}>Email</Text>
+            <Text style={[styles.label, { color: c.textMuted }]}>Email</Text>
             <TextInput
-              style={styles.input}
+              style={[
+                styles.input,
+                {
+                  backgroundColor: c.surfaceElevated,
+                  borderColor: c.border,
+                  color: c.text,
+                },
+              ]}
               placeholder="you@example.com"
-              placeholderTextColor={BECHO_COLORS.textMuted}
+              placeholderTextColor={c.textMuted}
               autoCapitalize="none"
               keyboardType="email-address"
               value={email}
@@ -156,191 +383,447 @@ export default function ProfileScreen() {
           </View>
 
           <View style={styles.fieldGroup}>
-            <Text style={styles.label}>Password</Text>
+            <Text style={[styles.label, { color: c.textMuted }]}>Password</Text>
             <TextInput
-              style={styles.input}
+              style={[
+                styles.input,
+                {
+                  backgroundColor: c.surfaceElevated,
+                  borderColor: c.border,
+                  color: c.text,
+                },
+              ]}
               placeholder="Minimum 6 characters"
-              placeholderTextColor={BECHO_COLORS.textMuted}
+              placeholderTextColor={c.textMuted}
               secureTextEntry
               value={password}
               onChangeText={setPassword}
             />
           </View>
 
-          <TouchableOpacity
-            style={[styles.primaryBtn, authSubmitting && { opacity: 0.7 }]}
+          <HapticButton
+            hapticStyle="medium"
+            style={[
+              styles.primaryBtn,
+              { backgroundColor: c.primary },
+              authSubmitting && { opacity: 0.7 },
+            ]}
             onPress={handleAuth}
             disabled={authSubmitting}
           >
             {authSubmitting ? (
-              <ActivityIndicator color="#052E16" />
+              <ActivityIndicator color={c.primaryText} />
             ) : (
-              <Text style={styles.primaryBtnText}>
+              <Text style={[styles.primaryBtnText, { color: c.primaryText }]}>
                 {isSignUp ? 'Create Account' : 'Sign In'}
               </Text>
             )}
-          </TouchableOpacity>
+          </HapticButton>
 
-          <TouchableOpacity
+          <HapticButton
+            hapticStyle="selection"
             style={styles.switchBtn}
             onPress={() => setIsSignUp((prev) => !prev)}
           >
-            <Text style={styles.switchText}>
+            <Text style={[styles.switchText, { color: c.primary }]}>
               {isSignUp
                 ? 'Already have an account? Sign In'
-                : "New to Becho? Create an account"}
+                : 'New to Becho? Create an account'}
             </Text>
-          </TouchableOpacity>
+          </HapticButton>
+
+          <View style={{ marginTop: 24 }}>{renderThemeCard()}</View>
         </ScrollView>
       </KeyboardAvoidingView>
     );
   }
 
-  // LOGGED-IN VIEW: Account Details + Sign Out
+  // LOGGED-IN VIEW
   return (
-    <ScrollView style={styles.page} contentContainerStyle={styles.profileContainer}>
-      <View style={styles.card}>
-        <View style={styles.avatarRow}>
-          <View style={styles.avatarCircle}>
-            <Text style={styles.avatarInitial}>
-              {(profile?.full_name || user.email || 'B')[0].toUpperCase()}
-            </Text>
-          </View>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.userName}>{profile?.full_name || 'Becho Member'}</Text>
-            <Text style={styles.userEmail}>{user.email}</Text>
-          </View>
-        </View>
-      </View>
+    <View style={[styles.page, { backgroundColor: c.bg }]}>
+      <ScreenHeader
+        title="Profile & Settings"
+        subtitle={profile?.city ? `${profile.city} • Becho Member` : 'Becho Member'}
+        leftAction={<BechoLogoMark size={34} />}
+      />
 
-      <View style={styles.card}>
-        <Text style={styles.sectionTitle}>Seller & Contact Details</Text>
-
-        <View style={styles.fieldGroup}>
-          <Text style={styles.label}>Display Name</Text>
-          <TextInput
-            style={styles.input}
-            value={editName}
-            onChangeText={setEditName}
-            placeholder="Your name"
-            placeholderTextColor={BECHO_COLORS.textMuted}
-          />
-        </View>
-
-        <View style={styles.fieldGroup}>
-          <Text style={styles.label}>Phone Number (optional)</Text>
-          <TextInput
-            style={styles.input}
-            value={editPhone}
-            onChangeText={setEditPhone}
-            placeholder="+91 98765 43210"
-            placeholderTextColor={BECHO_COLORS.textMuted}
-            keyboardType="phone-pad"
-          />
-        </View>
-
-        <View style={styles.fieldGroup}>
-          <Text style={styles.label}>Default City</Text>
-          <TextInput
-            style={styles.input}
-            value={editCity}
-            onChangeText={setEditCity}
-            placeholder="Chennai"
-            placeholderTextColor={BECHO_COLORS.textMuted}
-          />
-        </View>
-
-        <TouchableOpacity
-          style={[styles.primaryBtn, savingProfile && { opacity: 0.7 }]}
-          onPress={handleSaveProfile}
-          disabled={savingProfile}
+      <ScrollView
+        contentContainerStyle={[
+          styles.profileContainer,
+          { paddingBottom: 36 + insets.bottom },
+        ]}
+        keyboardShouldPersistTaps="handled"
+      >
+        {/* USER SUMMARY CARD */}
+        <View
+          style={[
+            styles.card,
+            {
+              backgroundColor: c.surface,
+              borderColor: c.border,
+              borderRadius: theme.radius.lg,
+              ...getCardElevation(theme),
+            },
+          ]}
         >
-          {savingProfile ? (
-            <ActivityIndicator color="#052E16" />
-          ) : (
-            <Text style={styles.primaryBtnText}>Save Profile</Text>
-          )}
-        </TouchableOpacity>
-      </View>
+          <View style={styles.avatarRow}>
+            <View style={[styles.avatarCircle, { backgroundColor: c.primaryMuted }]}>
+              <Text style={[styles.avatarInitial, { color: c.primary }]}>
+                {(profile?.full_name || user.email || 'B')[0].toUpperCase()}
+              </Text>
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.userName, { color: c.text }]}>
+                {profile?.full_name || 'Becho Member'}
+              </Text>
+              <Text style={[styles.userEmail, { color: c.textMuted }]}>{user.email}</Text>
+            </View>
+          </View>
+        </View>
 
-      <TouchableOpacity style={styles.signOutBtn} onPress={handleSignOut}>
-        <Ionicons name="log-out-outline" size={20} color={BECHO_COLORS.danger} />
-        <Text style={styles.signOutText}>Sign Out</Text>
-      </TouchableOpacity>
-    </ScrollView>
+        {/* APPEARANCE & MULTI-THEME CARD */}
+        {renderThemeCard()}
+
+        {/* MY LISTINGS MANAGEMENT */}
+        <View
+          style={[
+            styles.card,
+            {
+              backgroundColor: c.surface,
+              borderColor: c.border,
+              borderRadius: theme.radius.lg,
+              ...getCardElevation(theme),
+            },
+          ]}
+        >
+          <View style={styles.rowBetween}>
+            <Text style={[styles.sectionTitle, { color: c.text }]}>
+              My Ads ({myListings.length})
+            </Text>
+            <HapticButton
+              hapticStyle="selection"
+              onPress={() => router.push('/(tabs)/post')}
+            >
+              <Text style={[styles.newAdLink, { color: c.primary }]}>+ Post New</Text>
+            </HapticButton>
+          </View>
+
+          {loadingAds ? (
+            <ActivityIndicator color={c.primary} style={{ marginVertical: 16 }} />
+          ) : myListings.length === 0 ? (
+            <Text style={[styles.emptyAdsText, { color: c.textMuted }]}>
+              You haven&apos;t posted any ads yet. Tap &ldquo;+ Post New&rdquo; to list your
+              first item.
+            </Text>
+          ) : (
+            <View style={{ gap: 12 }}>
+              {myListings.map((item) => {
+                const isActive = item.status === 'ACTIVE';
+                const isBusy = busyAdId === item.id;
+                return (
+                  <View
+                    key={item.id}
+                    style={[
+                      styles.adItem,
+                      { backgroundColor: c.surfaceElevated, borderColor: c.border },
+                    ]}
+                  >
+                    <HapticButton
+                      style={styles.adTopRow}
+                      onPress={() => router.push(`/listing/${item.id}`)}
+                    >
+                      {item.images?.[0] ? (
+                        <Image source={{ uri: item.images[0] }} style={styles.adThumb} />
+                      ) : (
+                        <View
+                          style={[
+                            styles.adThumbPlaceholder,
+                            { backgroundColor: c.surface },
+                          ]}
+                        >
+                          <Ionicons name="image-outline" size={20} color={c.textMuted} />
+                        </View>
+                      )}
+
+                      <View style={{ flex: 1 }}>
+                        <View style={styles.rowBetween}>
+                          <Text style={[styles.adPrice, { color: c.primary }]}>
+                            {formatListingPrice(item)}
+                          </Text>
+                          <View
+                            style={[
+                              styles.statusPill,
+                              isActive
+                                ? { backgroundColor: c.primaryMuted }
+                                : { backgroundColor: 'rgba(239, 68, 68, 0.16)' },
+                            ]}
+                          >
+                            <Text
+                              style={[
+                                styles.statusText,
+                                { color: isActive ? c.primary : c.danger },
+                              ]}
+                            >
+                              {item.status}
+                            </Text>
+                          </View>
+                        </View>
+                        <Text
+                          style={[styles.adTitle, { color: c.text }]}
+                          numberOfLines={1}
+                        >
+                          {item.title}
+                        </Text>
+                        <Text style={[styles.adMeta, { color: c.textMuted }]}>
+                          {item.listing_type} • {item.category}
+                        </Text>
+                      </View>
+                    </HapticButton>
+
+                    <View style={styles.adActions}>
+                      <HapticButton
+                        style={[
+                          styles.actionBtn,
+                          { backgroundColor: c.surface, borderColor: c.border },
+                        ]}
+                        onPress={() => handleToggleAdStatus(item)}
+                        disabled={isBusy}
+                      >
+                        <Ionicons
+                          name={isActive ? 'checkmark-done-outline' : 'refresh-outline'}
+                          size={15}
+                          color={c.primary}
+                        />
+                        <Text style={[styles.actionBtnText, { color: c.primary }]}>
+                          {isActive
+                            ? item.listing_type === 'RENT'
+                              ? 'Mark Rented'
+                              : 'Mark Sold'
+                            : 'Relist Active'}
+                        </Text>
+                      </HapticButton>
+
+                      <HapticButton
+                        style={[
+                          styles.actionBtn,
+                          styles.deleteBtn,
+                          { backgroundColor: c.surface },
+                        ]}
+                        onPress={() => handleDeleteAd(item)}
+                        disabled={isBusy}
+                      >
+                        <Ionicons name="trash-outline" size={15} color={c.danger} />
+                        <Text style={[styles.actionBtnText, { color: c.danger }]}>
+                          Delete
+                        </Text>
+                      </HapticButton>
+                    </View>
+                  </View>
+                );
+              })}
+            </View>
+          )}
+        </View>
+
+        {/* SELLER DETAILS FORM */}
+        <View
+          style={[
+            styles.card,
+            {
+              backgroundColor: c.surface,
+              borderColor: c.border,
+              borderRadius: theme.radius.lg,
+              ...getCardElevation(theme),
+            },
+          ]}
+        >
+          <Text style={[styles.sectionTitle, { color: c.text }]}>
+            Seller & Contact Details
+          </Text>
+
+          <View style={styles.fieldGroup}>
+            <Text style={[styles.label, { color: c.textMuted }]}>Display Name</Text>
+            <TextInput
+              style={[
+                styles.input,
+                {
+                  backgroundColor: c.surfaceElevated,
+                  borderColor: c.border,
+                  color: c.text,
+                },
+              ]}
+              value={editName}
+              onChangeText={setEditName}
+              placeholder="Your name"
+              placeholderTextColor={c.textMuted}
+            />
+          </View>
+
+          <View style={styles.fieldGroup}>
+            <Text style={[styles.label, { color: c.textMuted }]}>
+              Phone Number (optional)
+            </Text>
+            <TextInput
+              style={[
+                styles.input,
+                {
+                  backgroundColor: c.surfaceElevated,
+                  borderColor: c.border,
+                  color: c.text,
+                },
+              ]}
+              value={editPhone}
+              onChangeText={setEditPhone}
+              placeholder="+91 98765 43210"
+              placeholderTextColor={c.textMuted}
+              keyboardType="phone-pad"
+            />
+          </View>
+
+          <View style={styles.fieldGroup}>
+            <Text style={[styles.label, { color: c.textMuted }]}>Default City</Text>
+            <TextInput
+              style={[
+                styles.input,
+                {
+                  backgroundColor: c.surfaceElevated,
+                  borderColor: c.border,
+                  color: c.text,
+                },
+              ]}
+              value={editCity}
+              onChangeText={setEditCity}
+              placeholder="Chennai"
+              placeholderTextColor={c.textMuted}
+            />
+          </View>
+
+          <HapticButton
+            hapticStyle="medium"
+            style={[
+              styles.primaryBtn,
+              { backgroundColor: c.primary },
+              savingProfile && { opacity: 0.7 },
+            ]}
+            onPress={handleSaveProfile}
+            disabled={savingProfile}
+          >
+            {savingProfile ? (
+              <ActivityIndicator color={c.primaryText} />
+            ) : (
+              <Text style={[styles.primaryBtnText, { color: c.primaryText }]}>
+                Save Profile
+              </Text>
+            )}
+          </HapticButton>
+        </View>
+
+        <HapticButton
+          hapticStyle="medium"
+          style={[
+            styles.signOutBtn,
+            { backgroundColor: c.surface, borderColor: c.border },
+          ]}
+          onPress={handleSignOut}
+        >
+          <Ionicons name="log-out-outline" size={20} color={c.danger} />
+          <Text style={[styles.signOutText, { color: c.danger }]}>Sign Out</Text>
+        </HapticButton>
+      </ScrollView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  centered: { flex: 1, backgroundColor: BECHO_COLORS.bg, alignItems: 'center', justifyContent: 'center' },
-  page: { flex: 1, backgroundColor: BECHO_COLORS.bg },
+  centered: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  page: { flex: 1 },
   authContainer: { flexGrow: 1, justifyContent: 'center', padding: 24 },
   profileContainer: { padding: 16, gap: 16 },
-  logoBadge: {
-    width: 64,
-    height: 64,
-    borderRadius: 18,
-    backgroundColor: BECHO_COLORS.surfaceElevated,
-    borderWidth: 1,
-    borderColor: BECHO_COLORS.border,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 16,
-  },
-  brandTitle: { color: BECHO_COLORS.text, fontSize: 24, fontWeight: '800' },
-  brandSub: { color: BECHO_COLORS.textMuted, fontSize: 14, marginTop: 6, marginBottom: 24 },
+  brandTitle: { fontSize: 24, fontWeight: '800', textAlign: 'center' },
+  brandSub: { fontSize: 14, marginTop: 6, marginBottom: 24, textAlign: 'center' },
   card: {
-    backgroundColor: BECHO_COLORS.surface,
-    borderRadius: 16,
     borderWidth: 1,
-    borderColor: BECHO_COLORS.border,
     padding: 16,
+  },
+  rowBetween: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
   },
   avatarRow: { flexDirection: 'row', alignItems: 'center', gap: 14 },
   avatarCircle: {
     width: 54,
     height: 54,
     borderRadius: 27,
-    backgroundColor: BECHO_COLORS.primaryMuted,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  avatarInitial: { color: BECHO_COLORS.primary, fontSize: 22, fontWeight: '800' },
-  userName: { color: BECHO_COLORS.text, fontSize: 18, fontWeight: '700' },
-  userEmail: { color: BECHO_COLORS.textMuted, fontSize: 13, marginTop: 2 },
-  sectionTitle: { color: BECHO_COLORS.text, fontSize: 16, fontWeight: '700', marginBottom: 14 },
-  fieldGroup: { marginBottom: 14 },
-  label: { color: BECHO_COLORS.textMuted, fontSize: 13, fontWeight: '600', marginBottom: 6 },
-  input: {
-    backgroundColor: BECHO_COLORS.surfaceElevated,
+  avatarInitial: { fontSize: 22, fontWeight: '800' },
+  userName: { fontSize: 18, fontWeight: '700' },
+  userEmail: { fontSize: 13, marginTop: 2 },
+  sectionTitle: { fontSize: 16, fontWeight: '700', marginBottom: 12 },
+  newAdLink: { fontSize: 13, fontWeight: '700', marginBottom: 12 },
+  emptyAdsText: { fontSize: 13, lineHeight: 19 },
+  adItem: {
+    borderRadius: 12,
     borderWidth: 1,
-    borderColor: BECHO_COLORS.border,
+    padding: 10,
+    gap: 10,
+  },
+  adTopRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  adThumb: { width: 58, height: 58, borderRadius: 10 },
+  adThumbPlaceholder: {
+    width: 58,
+    height: 58,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  adPrice: { fontSize: 14, fontWeight: '800' },
+  adTitle: { fontSize: 14, fontWeight: '600', marginTop: 2 },
+  adMeta: { fontSize: 11, marginTop: 2 },
+  statusPill: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6 },
+  statusText: { fontSize: 10, fontWeight: '800' },
+  adActions: { flexDirection: 'row', gap: 8 },
+  actionBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 5,
+    paddingVertical: 8,
+    borderRadius: 8,
+    borderWidth: 1,
+  },
+  deleteBtn: { borderColor: 'rgba(239, 68, 68, 0.35)' },
+  actionBtnText: { fontSize: 12, fontWeight: '700' },
+  fieldGroup: { marginBottom: 14 },
+  label: { fontSize: 13, fontWeight: '600', marginBottom: 6 },
+  input: {
+    borderWidth: 1,
     borderRadius: 12,
     paddingHorizontal: 14,
     paddingVertical: 12,
-    color: BECHO_COLORS.text,
     fontSize: 15,
   },
   primaryBtn: {
-    backgroundColor: BECHO_COLORS.primary,
     borderRadius: 12,
     paddingVertical: 14,
     alignItems: 'center',
     marginTop: 6,
   },
-  primaryBtnText: { color: '#052E16', fontSize: 15, fontWeight: '800' },
+  primaryBtnText: { fontSize: 15, fontWeight: '800' },
   switchBtn: { marginTop: 18, alignItems: 'center' },
-  switchText: { color: BECHO_COLORS.primary, fontSize: 14, fontWeight: '600' },
+  switchText: { fontSize: 14, fontWeight: '600' },
   signOutBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    backgroundColor: BECHO_COLORS.surface,
     borderWidth: 1,
-    borderColor: BECHO_COLORS.border,
     borderRadius: 12,
     paddingVertical: 14,
   },
-  signOutText: { color: BECHO_COLORS.danger, fontSize: 15, fontWeight: '700' },
+  signOutText: { fontSize: 15, fontWeight: '700' },
 });

@@ -1,62 +1,98 @@
 import { Ionicons } from '@expo/vector-icons';
+import * as Haptics from 'expo-haptics';
 import { Tabs } from 'expo-router';
-import { BECHO_COLORS } from '../../lib/theme';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { getCardElevation, useBechoTheme } from '../../lib/theme';
+
+function resolveIconColor(color: unknown, fallback: string): string {
+  return typeof color === 'string' && color.length > 0 ? color : fallback;
+}
 
 export default function TabsLayout() {
+  const { theme } = useBechoTheme();
+  const insets = useSafeAreaInsets();
+  const bottomPad = Math.max(insets.bottom, 10);
+
   return (
     <Tabs
       screenOptions={{
-        headerStyle: { backgroundColor: BECHO_COLORS.surface },
-        headerTintColor: BECHO_COLORS.text,
-        headerTitleStyle: { fontWeight: '700' },
-        tabBarStyle: {
-          backgroundColor: BECHO_COLORS.surface,
-          borderTopColor: BECHO_COLORS.border,
-          height: 62,
-          paddingBottom: 8,
-          paddingTop: 6,
+        headerShown: false,
+        tabBarActiveTintColor: theme.colors.primary,
+        tabBarInactiveTintColor: theme.colors.textMuted,
+        tabBarHideOnKeyboard: true,
+        tabBarLabelStyle: {
+          fontSize: 11,
+          fontWeight: '700',
+          marginTop: 2,
         },
-        tabBarActiveTintColor: BECHO_COLORS.primary,
-        tabBarInactiveTintColor: BECHO_COLORS.textMuted,
+        tabBarItemStyle: {
+          paddingTop: 6,
+          paddingBottom: 2,
+        },
+        tabBarStyle: {
+          backgroundColor: theme.colors.surface,
+          borderTopColor: theme.colors.border,
+          borderTopWidth: 1,
+          minHeight: 58 + bottomPad,
+          paddingBottom: bottomPad,
+          ...getCardElevation(theme),
+        },
+      }}
+      screenListeners={{
+        tabPress: () => {
+          Haptics.selectionAsync().catch(() => {});
+        },
       }}
     >
       <Tabs.Screen
         name="index"
         options={{
-          title: 'Becho',
-          tabBarLabel: 'Home',
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="home-outline" size={size} color={color} />
+          title: 'Home',
+          tabBarIcon: ({ color, focused }) => (
+            <Ionicons
+              name={focused ? 'home' : 'home-outline'}
+              size={22}
+              color={resolveIconColor(color, theme.colors.primary)}
+            />
           ),
         }}
       />
       <Tabs.Screen
         name="post"
         options={{
-          title: 'Post an Ad',
-          tabBarLabel: 'Post Ad',
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="add-circle-outline" size={size} color={color} />
+          title: 'Post Ad',
+          tabBarIcon: ({ color, focused }) => (
+            <Ionicons
+              name={focused ? 'add-circle' : 'add-circle-outline'}
+              size={23}
+              color={resolveIconColor(color, theme.colors.primary)}
+            />
           ),
         }}
       />
       <Tabs.Screen
         name="chats"
         options={{
-          title: 'Messages',
-          tabBarLabel: 'Chats',
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="chatbubbles-outline" size={size} color={color} />
+          title: 'Chats',
+          tabBarIcon: ({ color, focused }) => (
+            <Ionicons
+              name={focused ? 'chatbubbles' : 'chatbubbles-outline'}
+              size={22}
+              color={resolveIconColor(color, theme.colors.primary)}
+            />
           ),
         }}
       />
       <Tabs.Screen
         name="profile"
         options={{
-          title: 'My Profile',
-          tabBarLabel: 'Profile',
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="person-outline" size={size} color={color} />
+          title: 'Profile',
+          tabBarIcon: ({ color, focused }) => (
+            <Ionicons
+              name={focused ? 'person' : 'person-outline'}
+              size={22}
+              color={resolveIconColor(color, theme.colors.primary)}
+            />
           ),
         }}
       />

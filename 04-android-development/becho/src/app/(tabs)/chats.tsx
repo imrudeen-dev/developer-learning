@@ -7,13 +7,14 @@ import {
   RefreshControl,
   StyleSheet,
   Text,
-  TouchableOpacity,
   View,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { BechoLogoMark, HapticButton, ScreenHeader } from '../../components/NativeUI';
 import { useAuth } from '../../lib/auth-context';
 import { formatTimeAgo } from '../../lib/listings';
 import { supabase } from '../../lib/supabase';
-import { BECHO_COLORS } from '../../lib/theme';
+import { getCardElevation, useBechoTheme } from '../../lib/theme';
 
 interface ThreadSummary {
   key: string;
@@ -27,7 +28,10 @@ interface ThreadSummary {
 
 export default function ChatsInboxScreen() {
   const { user } = useAuth();
+  const { theme } = useBechoTheme();
+  const insets = useSafeAreaInsets();
   const router = useRouter();
+  const c = theme.colors;
 
   const [threads, setThreads] = useState<ThreadSummary[]>([]);
   const [loading, setLoading] = useState(true);
@@ -117,50 +121,103 @@ export default function ChatsInboxScreen() {
 
   if (!user) {
     return (
-      <View style={styles.centered}>
-        <Ionicons name="chatbubbles-outline" size={44} color={BECHO_COLORS.primary} />
-        <Text style={styles.gateTitle}>Sign in to view your chats</Text>
-        <Text style={styles.gateSub}>
-          Message sellers directly about any item or rental on Becho.
-        </Text>
-        <TouchableOpacity
-          style={styles.primaryBtn}
-          onPress={() => router.push('/(tabs)/profile')}
-        >
-          <Text style={styles.primaryBtnText}>Sign In</Text>
-        </TouchableOpacity>
+      <View style={[styles.page, { backgroundColor: c.bg }]}>
+        <ScreenHeader
+          title="Messages"
+          subtitle="Direct buyer & seller chat"
+          leftAction={<BechoLogoMark size={34} />}
+        />
+        <View style={styles.centered}>
+          <View
+            style={[
+              styles.gateIcon,
+              {
+                backgroundColor: c.surface,
+                borderColor: c.border,
+                borderRadius: theme.radius.xl,
+                ...getCardElevation(theme),
+              },
+            ]}
+          >
+            <Ionicons name="chatbubbles-outline" size={40} color={c.primary} />
+          </View>
+          <Text style={[styles.gateTitle, { color: c.text }]}>
+            Sign in to view your chats
+          </Text>
+          <Text style={[styles.gateSub, { color: c.textMuted }]}>
+            Message sellers directly about any item or rental on Becho.
+          </Text>
+          <HapticButton
+            hapticStyle="medium"
+            style={[
+              styles.primaryBtn,
+              { backgroundColor: c.primary, borderRadius: theme.radius.md },
+            ]}
+            onPress={() => router.push('/(tabs)/profile')}
+          >
+            <Text style={[styles.primaryBtnText, { color: c.primaryText }]}>Sign In</Text>
+          </HapticButton>
+        </View>
       </View>
     );
   }
 
   if (loading) {
     return (
-      <View style={styles.centered}>
-        <ActivityIndicator size="large" color={BECHO_COLORS.primary} />
+      <View style={[styles.page, { backgroundColor: c.bg }]}>
+        <ScreenHeader
+          title="Messages"
+          subtitle="Loading conversations..."
+          leftAction={<BechoLogoMark size={34} />}
+        />
+        <View style={styles.centered}>
+          <ActivityIndicator size="large" color={c.primary} />
+        </View>
       </View>
     );
   }
 
   return (
-    <View style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>Messages</Text>
-      </View>
+    <View style={[styles.page, { backgroundColor: c.bg }]}>
+      <ScreenHeader
+        title="Messages"
+        subtitle={
+          threads.length > 0
+            ? `${threads.length} active ${threads.length === 1 ? 'thread' : 'threads'}`
+            : 'Buyer & seller inbox'
+        }
+        leftAction={<BechoLogoMark size={34} />}
+      />
 
       <FlatList
         data={threads}
         keyExtractor={(item) => item.key}
-        contentContainerStyle={styles.listContent}
+        contentContainerStyle={[
+          styles.listContent,
+          { paddingBottom: 32 + insets.bottom },
+        ]}
+        showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
             onRefresh={() => loadThreads(true)}
-            tintColor={BECHO_COLORS.primary}
+            tintColor={c.primary}
+            colors={[c.primary]}
+            progressBackgroundColor={c.surface}
           />
         }
         renderItem={({ item }) => (
-          <TouchableOpacity
-            style={styles.threadCard}
+          <HapticButton
+            hapticStyle="light"
+            style={[
+              styles.threadCard,
+              {
+                backgroundColor: c.surface,
+                borderColor: c.border,
+                borderRadius: theme.radius.lg,
+                ...getCardElevation(theme),
+              },
+            ]}
             onPress={() =>
               router.push({
                 pathname: '/chat/[listingId]',
@@ -172,35 +229,38 @@ export default function ChatsInboxScreen() {
               })
             }
           >
-            <View style={styles.avatar}>
-              <Text style={styles.avatarText}>{item.peerName[0].toUpperCase()}</Text>
+            <View style={[styles.avatar, { backgroundColor: c.primaryMuted }]}>
+              <Text style={[styles.avatarText, { color: c.primary }]}>
+                {item.peerName[0].toUpperCase()}
+              </Text>
             </View>
             <View style={{ flex: 1 }}>
               <View style={styles.rowBetween}>
-                <Text style={styles.peerName} numberOfLines={1}>
+                <Text style={[styles.peerName, { color: c.text }]} numberOfLines={1}>
                   {item.peerName}
                 </Text>
-                <Text style={styles.time}>{formatTimeAgo(item.lastAt)}</Text>
+                <Text style={[styles.time, { color: c.textMuted }]}>
+                  {formatTimeAgo(item.lastAt)}
+                </Text>
               </View>
-              <Text style={styles.listingSub} numberOfLines={1}>
+              <Text style={[styles.listingSub, { color: c.primary }]} numberOfLines={1}>
                 {item.listingTitle}
               </Text>
-              <Text style={styles.preview} numberOfLines={1}>
+              <Text style={[styles.preview, { color: c.textMuted }]} numberOfLines={1}>
                 {item.lastMessage}
               </Text>
             </View>
-          </TouchableOpacity>
+            <Ionicons name="chevron-forward" size={18} color={c.textMuted} />
+          </HapticButton>
         )}
         ListEmptyComponent={
           <View style={styles.emptyBox}>
-            <Ionicons
-              name="chatbox-ellipses-outline"
-              size={44}
-              color={BECHO_COLORS.textMuted}
-            />
-            <Text style={styles.emptyTitle}>No conversations yet</Text>
-            <Text style={styles.emptySub}>
-              Open any listing on Home and tap "Chat with Seller" to start.
+            <Ionicons name="chatbox-ellipses-outline" size={44} color={c.textMuted} />
+            <Text style={[styles.emptyTitle, { color: c.text }]}>
+              No conversations yet
+            </Text>
+            <Text style={[styles.emptySub, { color: c.textMuted }]}>
+              Open any listing on Home and tap &ldquo;Chat with Seller&rdquo; to start.
             </Text>
           </View>
         }
@@ -210,64 +270,66 @@ export default function ChatsInboxScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: BECHO_COLORS.bg },
+  page: { flex: 1 },
   centered: {
     flex: 1,
-    backgroundColor: BECHO_COLORS.bg,
     alignItems: 'center',
     justifyContent: 'center',
     padding: 24,
   },
-  header: {
-    paddingHorizontal: 16,
-    paddingTop: 14,
-    paddingBottom: 12,
-    backgroundColor: BECHO_COLORS.surface,
-    borderBottomWidth: 1,
-    borderBottomColor: BECHO_COLORS.border,
-  },
-  headerTitle: { color: BECHO_COLORS.text, fontSize: 20, fontWeight: '800' },
   listContent: { padding: 14, gap: 10 },
   threadCard: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-    backgroundColor: BECHO_COLORS.surface,
     borderWidth: 1,
-    borderColor: BECHO_COLORS.border,
-    padding: 12,
-    borderRadius: 14,
+    padding: 13,
   },
   avatar: {
     width: 46,
     height: 46,
     borderRadius: 23,
-    backgroundColor: BECHO_COLORS.primaryMuted,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  avatarText: { color: BECHO_COLORS.primary, fontSize: 18, fontWeight: '800' },
-  rowBetween: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
-  peerName: { color: BECHO_COLORS.text, fontSize: 15, fontWeight: '700', flex: 1 },
-  time: { color: BECHO_COLORS.textMuted, fontSize: 11 },
-  listingSub: { color: BECHO_COLORS.primary, fontSize: 12, fontWeight: '600', marginTop: 1 },
-  preview: { color: BECHO_COLORS.textMuted, fontSize: 13, marginTop: 3 },
-  gateTitle: { color: BECHO_COLORS.text, fontSize: 18, fontWeight: '800', marginTop: 12 },
+  avatarText: { fontSize: 18, fontWeight: '800' },
+  rowBetween: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
+  peerName: { fontSize: 15, fontWeight: '700', flex: 1 },
+  time: { fontSize: 11 },
+  listingSub: { fontSize: 12, fontWeight: '700', marginTop: 2 },
+  preview: { fontSize: 13, marginTop: 3 },
+  gateIcon: {
+    width: 72,
+    height: 72,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 4,
+  },
+  gateTitle: { fontSize: 18, fontWeight: '800', marginTop: 12 },
   gateSub: {
-    color: BECHO_COLORS.textMuted,
     fontSize: 13,
     textAlign: 'center',
     marginTop: 6,
     marginBottom: 20,
+    lineHeight: 19,
   },
   primaryBtn: {
-    backgroundColor: BECHO_COLORS.primary,
     paddingHorizontal: 26,
     paddingVertical: 12,
-    borderRadius: 10,
   },
-  primaryBtnText: { color: '#052E16', fontWeight: '800' },
+  primaryBtnText: { fontWeight: '800', fontSize: 15 },
   emptyBox: { alignItems: 'center', paddingTop: 72, paddingHorizontal: 24 },
-  emptyTitle: { color: BECHO_COLORS.text, fontSize: 16, fontWeight: '700', marginTop: 10 },
-  emptySub: { color: BECHO_COLORS.textMuted, fontSize: 13, textAlign: 'center', marginTop: 4 },
+  emptyTitle: { fontSize: 16, fontWeight: '700', marginTop: 10 },
+  emptySub: {
+    fontSize: 13,
+    textAlign: 'center',
+    marginTop: 4,
+    lineHeight: 19,
+  },
 });
