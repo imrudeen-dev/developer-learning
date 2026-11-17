@@ -16,7 +16,6 @@ import {
   BechoLogoMark,
   HapticButton,
   ListingSkeletonGrid,
-  ScreenHeader,
 } from '../../components/NativeUI';
 import { BECHO_CATEGORIES } from '../../lib/constants';
 import { Listing, formatListingPrice, formatTimeAgo } from '../../lib/listings';
@@ -127,11 +126,11 @@ export default function HomeFeedScreen() {
     return (
       <HapticButton
         hapticStyle="light"
+        scaleTo={0.97}
         style={[
           styles.card,
           {
             backgroundColor: c.surface,
-            borderColor: c.border,
             borderRadius: theme.radius.lg,
             ...getCardElevation(theme),
           },
@@ -162,7 +161,7 @@ export default function HomeFeedScreen() {
                 { color: isRent ? c.rentText : c.sellText },
               ]}
             >
-              {isRent ? 'RENT' : 'BUY'}
+              {isRent ? 'FOR RENT' : 'FOR SALE'}
             </Text>
           </View>
 
@@ -204,43 +203,53 @@ export default function HomeFeedScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: c.bg }]}>
-      {/* HEADER */}
-      <ScreenHeader
-        title="Becho"
-        subtitle="Local Buy & Rent Marketplace"
-        leftAction={<BechoLogoMark size={34} />}
-        rightAction={
-          <View
-            style={[
-              styles.cityPill,
-              {
-                backgroundColor: c.surfaceElevated,
-                borderColor: c.border,
-                borderRadius: theme.radius.full,
-              },
-            ]}
-          >
-            <Ionicons name="location" size={13} color={c.primary} />
-            <Text style={[styles.cityPillText, { color: c.text }]}>Chennai</Text>
+      {/* TOP BRAND & ACTION BAR */}
+      <View style={styles.topBar}>
+        <View style={styles.brandRow}>
+          <BechoLogoMark size={38} />
+          <View>
+            <Text style={[styles.brandTitle, { color: c.text }]}>Becho</Text>
+            <View style={styles.locationSubRow}>
+              <Ionicons name="location" size={12} color={c.primary} />
+              <Text style={[styles.locationSubText, { color: c.textMuted }]}>
+                Chennai Marketplace
+              </Text>
+            </View>
           </View>
-        }
-      />
+        </View>
 
-      {/* SEARCH BAR */}
+        <HapticButton
+          hapticStyle="medium"
+          style={[
+            styles.postPill,
+            {
+              backgroundColor: c.primary,
+              borderRadius: theme.radius.full,
+              ...getCardElevation(theme),
+            },
+          ]}
+          onPress={() => router.push('/(tabs)/post')}
+        >
+          <Ionicons name="add" size={17} color={c.primaryText} />
+          <Text style={[styles.postPillText, { color: c.primaryText }]}>Post Ad</Text>
+        </HapticButton>
+      </View>
+
+      {/* NATIVE FILLED SEARCH BAR */}
       <View
         style={[
           styles.searchBox,
           {
             backgroundColor: c.surface,
-            borderColor: c.border,
-            borderRadius: theme.radius.md,
+            borderRadius: theme.radius.lg,
+            ...getCardElevation(theme),
           },
         ]}
       >
-        <Ionicons name="search-outline" size={18} color={c.textMuted} />
+        <Ionicons name="search" size={19} color={c.primary} />
         <TextInput
           style={[styles.searchInput, { color: c.text }]}
-          placeholder="Search phones, bikes, cameras, rooms..."
+          placeholder="Search phones, bikes, cameras, rentals..."
           placeholderTextColor={c.textMuted}
           value={searchQuery}
           onChangeText={setSearchQuery}
@@ -251,14 +260,23 @@ export default function HomeFeedScreen() {
           <HapticButton
             hapticStyle="selection"
             onPress={() => setSearchQuery('')}
+            style={styles.clearBtn}
           >
             <Ionicons name="close-circle" size={18} color={c.textMuted} />
           </HapticButton>
         )}
       </View>
 
-      {/* ALL / BUY / RENT FILTER */}
-      <View style={styles.modeRow}>
+      {/* SEGMENTED BUY / RENT / ALL SWITCHER */}
+      <View
+        style={[
+          styles.segmentTrack,
+          {
+            backgroundColor: c.surface,
+            borderRadius: theme.radius.lg,
+          },
+        ]}
+      >
         {(
           [
             { key: 'ALL', label: 'All Ads' },
@@ -271,11 +289,11 @@ export default function HomeFeedScreen() {
             <HapticButton
               key={tab.key}
               hapticStyle="selection"
+              scaleTo={0.98}
               style={[
-                styles.modeBtn,
+                styles.segmentBtn,
                 {
-                  backgroundColor: active ? c.primary : c.surface,
-                  borderColor: active ? c.primary : c.border,
+                  backgroundColor: active ? c.primary : 'transparent',
                   borderRadius: theme.radius.md,
                 },
               ]}
@@ -283,7 +301,7 @@ export default function HomeFeedScreen() {
             >
               <Text
                 style={[
-                  styles.modeBtnText,
+                  styles.segmentText,
                   { color: active ? c.primaryText : c.textMuted },
                 ]}
               >
@@ -294,10 +312,11 @@ export default function HomeFeedScreen() {
         })}
       </View>
 
-      {/* CATEGORY CHIPS */}
+      {/* HORIZONTAL CATEGORY CHIPS */}
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
+        style={styles.categoryScrollView}
         contentContainerStyle={styles.categoryScroll}
       >
         {['All', ...BECHO_CATEGORIES].map((cat) => {
@@ -310,7 +329,6 @@ export default function HomeFeedScreen() {
                 styles.catChip,
                 {
                   backgroundColor: active ? c.primaryMuted : c.surface,
-                  borderColor: active ? c.primary : c.border,
                   borderRadius: theme.radius.full,
                 },
               ]}
@@ -319,7 +337,7 @@ export default function HomeFeedScreen() {
               <Text
                 style={[
                   styles.catChipText,
-                  { color: active ? c.primary : c.textMuted },
+                  { color: active ? c.primary : c.textSecondary },
                 ]}
               >
                 {cat}
@@ -329,7 +347,7 @@ export default function HomeFeedScreen() {
         })}
       </ScrollView>
 
-      {/* FEED LIST */}
+      {/* LISTING FEED */}
       {loading && listings.length === 0 ? (
         <ListingSkeletonGrid />
       ) : (
@@ -341,7 +359,7 @@ export default function HomeFeedScreen() {
           columnWrapperStyle={styles.columnWrapper}
           contentContainerStyle={[
             styles.listContent,
-            { paddingBottom: 32 + insets.bottom },
+            { paddingBottom: 96 + insets.bottom },
           ]}
           showsVerticalScrollIndicator={false}
           refreshControl={
@@ -354,13 +372,23 @@ export default function HomeFeedScreen() {
             />
           }
           ListEmptyComponent={
-            <View style={styles.emptyState}>
-              <Ionicons name="search-outline" size={44} color={c.textMuted} />
+            <View
+              style={[
+                styles.emptyState,
+                {
+                  backgroundColor: c.surface,
+                  borderRadius: theme.radius.xl,
+                },
+              ]}
+            >
+              <View style={[styles.emptyIconCircle, { backgroundColor: c.primaryMuted }]}>
+                <Ionicons name="sparkles-outline" size={32} color={c.primary} />
+              </View>
               <Text style={[styles.emptyTitle, { color: c.text }]}>
-                No matching ads found
+                No matching ads yet
               </Text>
               <Text style={[styles.emptySub, { color: c.textMuted }]}>
-                Try clearing filters or be the first to post an ad in this category.
+                Clear active filters or list the first item in this category.
               </Text>
               <HapticButton
                 hapticStyle="medium"
@@ -387,104 +415,214 @@ export default function HomeFeedScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  cityPill: {
+  topBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    paddingBottom: 10,
+  },
+  brandRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 11,
+  },
+  brandTitle: {
+    fontSize: 21,
+    fontWeight: '900',
+    letterSpacing: -0.4,
+  },
+  locationSubRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    marginTop: 1,
+  },
+  locationSubText: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  postPill: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    borderWidth: 1,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
+    paddingHorizontal: 14,
+    paddingVertical: 9,
   },
-  cityPillText: { fontSize: 12, fontWeight: '700' },
+  postPillText: {
+    fontSize: 13,
+    fontWeight: '800',
+  },
   searchBox: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    borderWidth: 1,
+    gap: 10,
+    marginHorizontal: 16,
+    marginTop: 4,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: 14,
+    fontWeight: '500',
+    padding: 0,
+  },
+  clearBtn: {
+    padding: 2,
+  },
+  segmentTrack: {
+    flexDirection: 'row',
     marginHorizontal: 16,
     marginTop: 12,
-    paddingHorizontal: 12,
-    paddingVertical: 11,
+    padding: 4,
+    gap: 4,
   },
-  searchInput: { flex: 1, fontSize: 14, padding: 0 },
-  modeRow: {
-    flexDirection: 'row',
-    gap: 8,
-    paddingHorizontal: 16,
-    marginTop: 12,
-  },
-  modeBtn: {
+  segmentBtn: {
     flex: 1,
     paddingVertical: 9,
-    borderWidth: 1,
     alignItems: 'center',
+    justifyContent: 'center',
   },
-  modeBtnText: { fontSize: 13, fontWeight: '800' },
+  segmentText: {
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  categoryScrollView: {
+    flexGrow: 0,
+    flexShrink: 0,
+  },
   categoryScroll: {
     paddingHorizontal: 16,
     paddingVertical: 12,
     gap: 8,
+    alignItems: 'flex-start',
   },
   catChip: {
-    paddingHorizontal: 13,
-    paddingVertical: 7,
-    borderWidth: 1,
+    alignSelf: 'flex-start',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
   },
-  catChipText: { fontSize: 12, fontWeight: '700' },
-  listContent: { paddingHorizontal: 16 },
-  columnWrapper: { justifyContent: 'space-between', gap: 12 },
+  catChipText: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  listContent: {
+    paddingHorizontal: 16,
+    paddingTop: 2,
+  },
+  columnWrapper: {
+    justifyContent: 'space-between',
+    gap: 12,
+  },
   card: {
     flex: 1,
     maxWidth: '48.5%',
-    borderWidth: 1,
     overflow: 'hidden',
-    marginBottom: 12,
+    marginBottom: 14,
   },
-  imageWrap: { width: '100%', height: 136 },
-  cardImage: { width: '100%', height: '100%' },
-  placeholderImage: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  imageWrap: {
+    width: '100%',
+    height: 142,
+  },
+  cardImage: {
+    width: '100%',
+    height: '100%',
+  },
+  placeholderImage: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   badge: {
     position: 'absolute',
-    top: 8,
-    left: 8,
+    top: 9,
+    left: 9,
     paddingHorizontal: 8,
     paddingVertical: 3,
   },
-  badgeText: { fontSize: 10, fontWeight: '900', letterSpacing: 0.4 },
+  badgeText: {
+    fontSize: 10,
+    fontWeight: '900',
+    letterSpacing: 0.4,
+  },
   photoCountPill: {
     position: 'absolute',
-    bottom: 8,
-    right: 8,
+    bottom: 9,
+    right: 9,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 3,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
+    paddingHorizontal: 7,
+    paddingVertical: 3,
     borderRadius: 6,
   },
-  photoCountText: { color: '#FFF', fontSize: 10, fontWeight: '700' },
-  cardBody: { padding: 11 },
-  priceText: { fontSize: 15, fontWeight: '800' },
+  photoCountText: {
+    color: '#FFF',
+    fontSize: 10,
+    fontWeight: '700',
+  },
+  cardBody: {
+    padding: 12,
+  },
+  priceText: {
+    fontSize: 16,
+    fontWeight: '900',
+    letterSpacing: -0.2,
+  },
   titleText: {
     fontSize: 13,
     fontWeight: '600',
     marginTop: 4,
     lineHeight: 18,
   },
-  metaRow: { flexDirection: 'row', alignItems: 'center', gap: 3, marginTop: 8 },
-  metaText: { fontSize: 11, flex: 1 },
+  metaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: 8,
+  },
+  metaText: {
+    fontSize: 11,
+    flex: 1,
+    fontWeight: '500',
+  },
   footerRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginTop: 8,
-    paddingTop: 6,
-    borderTopWidth: 1,
+    marginTop: 9,
+    paddingTop: 7,
+    borderTopWidth: StyleSheet.hairlineWidth,
   },
-  categoryTag: { fontSize: 10, flex: 1 },
-  timeText: { fontSize: 10 },
-  emptyState: { alignItems: 'center', paddingTop: 64, paddingHorizontal: 24 },
-  emptyTitle: { fontSize: 17, fontWeight: '700', marginTop: 12 },
+  categoryTag: {
+    fontSize: 10,
+    flex: 1,
+    fontWeight: '600',
+  },
+  timeText: {
+    fontSize: 10,
+    fontWeight: '500',
+  },
+  emptyState: {
+    alignItems: 'center',
+    marginTop: 28,
+    paddingVertical: 36,
+    paddingHorizontal: 24,
+  },
+  emptyIconCircle: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  emptyTitle: {
+    fontSize: 17,
+    fontWeight: '800',
+    marginTop: 14,
+  },
   emptySub: {
     fontSize: 13,
     textAlign: 'center',
@@ -493,8 +631,11 @@ const styles = StyleSheet.create({
   },
   postShortcutBtn: {
     marginTop: 18,
-    paddingHorizontal: 20,
-    paddingVertical: 11,
+    paddingHorizontal: 22,
+    paddingVertical: 12,
   },
-  postShortcutText: { fontWeight: '800', fontSize: 14 },
+  postShortcutText: {
+    fontWeight: '800',
+    fontSize: 14,
+  },
 });

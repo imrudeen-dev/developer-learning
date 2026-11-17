@@ -4,26 +4,48 @@ import React, { useEffect, useRef } from 'react';
 import {
     Animated,
     Easing,
+    Modal,
+    Pressable,
     StyleSheet,
     Text,
+    TextInput,
+    TextInputProps,
     TouchableOpacity,
     TouchableOpacityProps,
     View,
+    ViewStyle,
 } from 'react-native';
+import AnimatedReanimated, {
+    useAnimatedStyle,
+    useSharedValue,
+    withSpring,
+} from 'react-native-reanimated';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useBechoTheme } from '../lib/theme';
+
+const ReanimatedPressable = AnimatedReanimated.createAnimatedComponent(Pressable);
 
 interface HapticButtonProps extends TouchableOpacityProps {
   hapticStyle?: 'light' | 'medium' | 'selection';
+  scaleTo?: number;
 }
 
 export function HapticButton({
   onPress,
   hapticStyle = 'light',
+  scaleTo = 0.97,
   style,
   children,
+  disabled,
   ...rest
 }: HapticButtonProps) {
-  const handlePress = (e: any) => {
+  const scale = useSharedValue(1);
+
+  const animatedStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: scale.value }],
+  }));
+
+  const triggerHaptic = () => {
     if (hapticStyle === 'selection') {
       Haptics.selectionAsync().catch(() => {});
     } else if (hapticStyle === 'medium') {
@@ -31,19 +53,35 @@ export function HapticButton({
     } else {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
     }
-    onPress?.(e);
   };
 
   return (
-    <TouchableOpacity activeOpacity={0.82} onPress={handlePress} style={style} {...rest}>
+    <ReanimatedPressable
+      disabled={disabled}
+      onPressIn={() => {
+        if (!disabled) {
+          scale.value = withSpring(scaleTo, { damping: 18, stiffness: 320 });
+        }
+      }}
+      onPressOut={() => {
+        scale.value = withSpring(1, { damping: 16, stiffness: 280 });
+      }}
+      onPress={(e) => {
+        if (disabled) return;
+        triggerHaptic();
+        onPress?.(e as any);
+      }}
+      style={[animatedStyle, style as ViewStyle]}
+      {...(rest as any)}
+    >
       {children}
-    </TouchableOpacity>
+    </ReanimatedPressable>
   );
 }
 
 export function BechoLogoMark({ size = 38 }: { size?: number }) {
   const { theme } = useBechoTheme();
-  const inner = Math.round(size * 0.56);
+  const inner = Math.round(size * 0.54);
 
   return (
     <View
@@ -52,20 +90,195 @@ export function BechoLogoMark({ size = 38 }: { size?: number }) {
         {
           width: size,
           height: size,
-          borderRadius: Math.round(size * 0.3),
-          backgroundColor: theme.colors.primaryMuted,
-          borderColor: theme.colors.primary,
+          borderRadius: Math.round(size * 0.34),
+          backgroundColor: theme.colors.primary,
         },
       ]}
     >
-      <Ionicons name="bag-handle" size={inner} color={theme.colors.primary} />
+      <Ionicons name="bag-handle" size={inner} color={theme.colors.primaryText} />
     </View>
   );
 }
 
 const logoStyles = StyleSheet.create({
   badge: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+});
+
+interface NativeInputProps extends TextInputProps {
+  label?: string;
+  icon?: keyof typeof Ionicons.glyphMap;
+  rightElement?: React.ReactNode;
+  containerStyle?: ViewStyle;
+}
+
+export function NativeInput({
+  label,
+  icon,
+  rightElement,
+  containerStyle,
+  style,
+  ...rest
+}: NativeInputProps) {
+  const { theme } = useBechoTheme();
+  const c = theme.colors;
+  const [focused, setFocused] = React.useState(false);
+
+  return (
+    <View style={containerStyle}>
+      {label ? (
+        <Text style={[inputStyles.label, { color: c.textSecondary }]}>{label}</Text>
+      ) : null}
+      <View
+        style={[
+          inputStyles.field,
+          {
+            backgroundColor: c.surfaceElevated,
+            borderColor: focused ? c.primary : 'transparent',
+            borderRadius: theme.radius.md,
+          },
+        ]}
+      >
+        {icon ? (
+          <Ionicons
+            name={icon}
+            size={18}
+            color={focused ? c.primary : c.textMuted}
+          />
+        ) : null}
+        <TextInput
+          {...rest}
+          onFocus={(e) => {
+            setFocused(true);
+            rest.onFocus?.(e);
+          }}
+          onBlur={(e) => {
+            setFocused(false);
+            rest.onBlur?.(e);
+          }}
+          placeholderTextColor={c.textMuted}
+          style={[inputStyles.input, { color: c.text }, style]}
+        />
+        {rightElement}
+      </View>
+    </View>
+  );
+}
+
+const inputStyles = StyleSheet.create({
+  label: {
+    fontSize: 12,
+    fontWeight: '700',
+    letterSpacing: 0.2,
+    marginBottom: 6,
+  },
+  field: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
     borderWidth: 1.5,
+  },
+  input: {
+    flex: 1,
+    fontSize: 15,
+    fontWeight: '500',
+    padding: 0,
+  },
+});
+
+export function NativeBottomSheet({
+  visible,
+  onClose,
+  title,
+  children,
+}: {
+  visible: boolean;
+  onClose: () => void;
+  title: string;
+  children: React.ReactNode;
+}) {
+  const { theme } = useBechoTheme();
+  const insets = useSafeAreaInsets();
+  const c = theme.colors;
+
+  return (
+    <Modal
+      visible={visible}
+      transparent
+      animationType="slide"
+      onRequestClose={onClose}
+    >
+      <Pressable
+        style={[sheetStyles.backdrop, { backgroundColor: c.overlay }]}
+        onPress={onClose}
+      >
+        <Pressable
+          style={[
+            sheetStyles.sheet,
+            {
+              backgroundColor: c.surface,
+              borderTopLeftRadius: theme.radius.xl,
+              borderTopRightRadius: theme.radius.xl,
+              paddingBottom: Math.max(insets.bottom, 20) + 8,
+            },
+          ]}
+          onPress={(e) => e.stopPropagation()}
+        >
+          <View style={[sheetStyles.handle, { backgroundColor: c.borderStrong }]} />
+          <View style={sheetStyles.headerRow}>
+            <Text style={[sheetStyles.sheetTitle, { color: c.text }]}>{title}</Text>
+            <TouchableOpacity
+              onPress={() => {
+                Haptics.selectionAsync().catch(() => {});
+                onClose();
+              }}
+              style={[sheetStyles.closeBtn, { backgroundColor: c.surfaceElevated }]}
+            >
+              <Ionicons name="close" size={18} color={c.textSecondary} />
+            </TouchableOpacity>
+          </View>
+          {children}
+        </Pressable>
+      </Pressable>
+    </Modal>
+  );
+}
+
+const sheetStyles = StyleSheet.create({
+  backdrop: {
+    flex: 1,
+    justifyContent: 'flex-end',
+  },
+  sheet: {
+    paddingHorizontal: 18,
+    paddingTop: 10,
+  },
+  handle: {
+    width: 38,
+    height: 4,
+    borderRadius: 2,
+    alignSelf: 'center',
+    marginBottom: 14,
+  },
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 14,
+  },
+  sheetTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    letterSpacing: -0.2,
+  },
+  closeBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -110,7 +323,6 @@ export function ListingSkeletonGrid() {
             skeletonStyles.card,
             {
               backgroundColor: theme.colors.surface,
-              borderColor: theme.colors.border,
               opacity,
             },
           ]}
@@ -155,20 +367,19 @@ const skeletonStyles = StyleSheet.create({
   },
   card: {
     width: '48.2%',
-    borderRadius: 16,
-    borderWidth: 1,
+    borderRadius: 18,
     overflow: 'hidden',
   },
   image: {
     width: '100%',
-    height: 136,
+    height: 140,
   },
   body: {
     padding: 12,
     gap: 8,
   },
   lineWide: {
-    height: 14,
+    height: 15,
     width: '65%',
     borderRadius: 6,
   },
@@ -202,8 +413,7 @@ export function ScreenHeader({
       style={[
         headerStyles.wrap,
         {
-          backgroundColor: theme.colors.surface,
-          borderBottomColor: theme.colors.border,
+          backgroundColor: theme.colors.bg,
         },
       ]}
     >
@@ -233,9 +443,8 @@ const headerStyles = StyleSheet.create({
   wrap: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 14,
+    paddingHorizontal: 16,
     paddingVertical: 12,
-    borderBottomWidth: 1,
   },
   side: {
     minWidth: 42,
@@ -244,12 +453,12 @@ const headerStyles = StyleSheet.create({
   center: {
     flex: 1,
     alignItems: 'center',
-    paddingHorizontal: 6,
+    paddingHorizontal: 8,
   },
   title: {
-    fontSize: 17,
+    fontSize: 18,
     fontWeight: '800',
-    letterSpacing: -0.2,
+    letterSpacing: -0.3,
   },
   subtitle: {
     fontSize: 11,

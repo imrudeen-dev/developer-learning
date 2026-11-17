@@ -14,11 +14,14 @@ import {
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { BechoLogoMark, HapticButton, ScreenHeader } from '../../components/NativeUI';
+import {
+  BechoLogoMark,
+  HapticButton,
+  NativeInput,
+} from '../../components/NativeUI';
 import { useAuth } from '../../lib/auth-context';
 import { BECHO_CATEGORIES, RENT_PERIODS } from '../../lib/constants';
 import { supabase } from '../../lib/supabase';
@@ -226,18 +229,18 @@ export default function PostAdScreen() {
   if (!user) {
     return (
       <View style={[styles.page, { backgroundColor: c.bg }]}>
-        <ScreenHeader
-          title="Post an Ad"
-          subtitle="Sell or rent locally"
-          leftAction={<BechoLogoMark size={34} />}
-        />
+        <View style={styles.topStrip}>
+          <View style={styles.brandRow}>
+            <BechoLogoMark size={36} />
+            <Text style={[styles.screenTitle, { color: c.text }]}>Post Ad</Text>
+          </View>
+        </View>
         <View style={styles.authGate}>
           <View
             style={[
               styles.gateIcon,
               {
                 backgroundColor: c.surface,
-                borderColor: c.border,
                 borderRadius: theme.radius.xl,
                 ...getCardElevation(theme),
               },
@@ -253,7 +256,11 @@ export default function PostAdScreen() {
             hapticStyle="medium"
             style={[
               styles.primaryBtn,
-              { backgroundColor: c.primary, borderRadius: theme.radius.md },
+              {
+                backgroundColor: c.primary,
+                borderRadius: theme.radius.md,
+                ...getCardElevation(theme),
+              },
             ]}
             onPress={() => router.push('/(tabs)/profile')}
           >
@@ -269,34 +276,67 @@ export default function PostAdScreen() {
   return (
     <KeyboardAvoidingView
       style={[styles.page, { backgroundColor: c.bg }]}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 64 : 0}
     >
-      <ScreenHeader
-        title="Post an Ad"
-        subtitle={listingType === 'SELL' ? 'Marketplace Sale Listing' : 'Rental Listing'}
-        leftAction={<BechoLogoMark size={34} />}
-      />
-
       <ScrollView
         contentContainerStyle={[
           styles.container,
-          { paddingBottom: 44 + insets.bottom },
+          { paddingBottom: 104 + insets.bottom },
         ]}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
-        {/* 1. LISTING TYPE TOGGLE (SELL vs RENT) */}
-        <Text style={[styles.sectionLabel, { color: c.text }]}>
-          What would you like to do?
-        </Text>
-        <View style={styles.toggleRow}>
+        {/* TOP BRAND HEADER */}
+        <View style={styles.topStrip}>
+          <View style={styles.brandRow}>
+            <BechoLogoMark size={36} />
+            <View>
+              <Text style={[styles.screenTitle, { color: c.text }]}>Post an Ad</Text>
+              <Text style={[styles.screenSub, { color: c.textMuted }]}>
+                {listingType === 'SELL' ? 'Buy & Sell Marketplace' : 'Local Rental Listing'}
+              </Text>
+            </View>
+          </View>
+
+          <View
+            style={[
+              styles.modeBadge,
+              {
+                backgroundColor: listingType === 'SELL' ? c.sellBadge : c.rentBadge,
+                borderRadius: theme.radius.full,
+              },
+            ]}
+          >
+            <Text
+              style={[
+                styles.modeBadgeText,
+                { color: listingType === 'SELL' ? c.sellText : c.rentText },
+              ]}
+            >
+              {listingType === 'SELL' ? 'SALE' : 'RENT'}
+            </Text>
+          </View>
+        </View>
+
+        {/* 1. LISTING TYPE SEGMENTED SWITCHER */}
+        <View
+          style={[
+            styles.segmentTrack,
+            {
+              backgroundColor: c.surface,
+              borderRadius: theme.radius.lg,
+              ...getCardElevation(theme),
+            },
+          ]}
+        >
           <HapticButton
             hapticStyle="selection"
+            scaleTo={0.98}
             style={[
-              styles.toggleChip,
+              styles.segmentBtn,
               {
-                backgroundColor: listingType === 'SELL' ? c.sellBadge : c.surface,
-                borderColor: listingType === 'SELL' ? c.sellBadge : c.border,
+                backgroundColor: listingType === 'SELL' ? c.sellBadge : 'transparent',
                 borderRadius: theme.radius.md,
               },
             ]}
@@ -304,13 +344,13 @@ export default function PostAdScreen() {
           >
             <Ionicons
               name="pricetag-outline"
-              size={18}
-              color={listingType === 'SELL' ? c.sellText : c.text}
+              size={17}
+              color={listingType === 'SELL' ? c.sellText : c.textMuted}
             />
             <Text
               style={[
-                styles.toggleText,
-                { color: listingType === 'SELL' ? c.sellText : c.text },
+                styles.segmentText,
+                { color: listingType === 'SELL' ? c.sellText : c.textMuted },
               ]}
             >
               Sell Item
@@ -319,11 +359,11 @@ export default function PostAdScreen() {
 
           <HapticButton
             hapticStyle="selection"
+            scaleTo={0.98}
             style={[
-              styles.toggleChip,
+              styles.segmentBtn,
               {
-                backgroundColor: listingType === 'RENT' ? c.rentBadge : c.surface,
-                borderColor: listingType === 'RENT' ? c.rentBadge : c.border,
+                backgroundColor: listingType === 'RENT' ? c.rentBadge : 'transparent',
                 borderRadius: theme.radius.md,
               },
             ]}
@@ -331,13 +371,13 @@ export default function PostAdScreen() {
           >
             <Ionicons
               name="repeat-outline"
-              size={18}
-              color={listingType === 'RENT' ? c.rentText : c.text}
+              size={17}
+              color={listingType === 'RENT' ? c.rentText : c.textMuted}
             />
             <Text
               style={[
-                styles.toggleText,
-                { color: listingType === 'RENT' ? c.rentText : c.text },
+                styles.segmentText,
+                { color: listingType === 'RENT' ? c.rentText : c.textMuted },
               ]}
             >
               Rent Out
@@ -345,298 +385,290 @@ export default function PostAdScreen() {
           </HapticButton>
         </View>
 
-        {/* 2. PHOTOS PICKER */}
-        <View style={styles.rowBetween}>
-          <Text style={[styles.sectionLabel, { color: c.text }]}>
-            Photos ({photos.length}/5)
-          </Text>
-          <Text style={[styles.helperText, { color: c.textMuted }]}>
-            First photo becomes cover
-          </Text>
-        </View>
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.photoRow}
+        {/* 2. PHOTOS SURFACE BLOCK */}
+        <View
+          style={[
+            styles.surfaceBlock,
+            {
+              backgroundColor: c.surface,
+              borderRadius: theme.radius.xl,
+              ...getCardElevation(theme),
+            },
+          ]}
         >
-          {photos.length < 5 && (
-            <HapticButton
-              hapticStyle="light"
-              style={[
-                styles.addPhotoBox,
-                {
-                  borderColor: c.primary,
-                  backgroundColor: c.surface,
-                  borderRadius: theme.radius.lg,
-                },
-              ]}
-              onPress={handlePickPhotos}
-            >
-              <Ionicons name="camera-outline" size={28} color={c.primary} />
-              <Text style={[styles.addPhotoText, { color: c.primary }]}>Add Photos</Text>
-            </HapticButton>
-          )}
+          <View style={styles.rowBetween}>
+            <Text style={[styles.sectionLabel, { color: c.text }]}>
+              Photos ({photos.length}/5)
+            </Text>
+            <Text style={[styles.helperText, { color: c.textMuted }]}>
+              First photo is cover
+            </Text>
+          </View>
 
-          {photos.map((photo, index) => (
-            <View
-              key={photo.uri + index}
-              style={[
-                styles.photoPreviewWrap,
-                {
-                  borderRadius: theme.radius.lg,
-                  borderColor: c.border,
-                },
-              ]}
-            >
-              <Image source={{ uri: photo.uri }} style={styles.photoPreview} />
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.photoRow}
+          >
+            {photos.length < 5 && (
               <HapticButton
                 hapticStyle="light"
-                style={[styles.removePhotoBtn, { backgroundColor: c.overlay }]}
-                onPress={() => removePhoto(index)}
-              >
-                <Ionicons name="close" size={14} color="#FFF" />
-              </HapticButton>
-            </View>
-          ))}
-        </ScrollView>
-
-        {/* 3. CATEGORY CHIPS */}
-        <Text style={[styles.sectionLabel, { color: c.text }]}>Category</Text>
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.chipRow}
-        >
-          {BECHO_CATEGORIES.map((cat) => {
-            const active = category === cat;
-            return (
-              <HapticButton
-                key={cat}
-                hapticStyle="selection"
                 style={[
-                  styles.categoryChip,
+                  styles.addPhotoBox,
                   {
-                    backgroundColor: active ? c.primaryMuted : c.surface,
-                    borderColor: active ? c.primary : c.border,
-                    borderRadius: theme.radius.full,
+                    borderColor: c.primary,
+                    backgroundColor: c.surfaceElevated,
+                    borderRadius: theme.radius.lg,
                   },
                 ]}
-                onPress={() => setCategory(cat)}
+                onPress={handlePickPhotos}
               >
-                <Text
-                  style={[
-                    styles.categoryText,
-                    { color: active ? c.primary : c.textMuted },
-                  ]}
-                >
-                  {cat}
-                </Text>
+                <Ionicons name="camera-outline" size={26} color={c.primary} />
+                <Text style={[styles.addPhotoText, { color: c.primary }]}>Add Photo</Text>
               </HapticButton>
-            );
-          })}
-        </ScrollView>
+            )}
 
-        {/* 4. TITLE & DESCRIPTION */}
-        <View style={styles.fieldGroup}>
-          <Text style={[styles.label, { color: c.textMuted }]}>Ad Title *</Text>
-          <TextInput
-            style={[
-              styles.input,
-              {
-                backgroundColor: c.surfaceElevated,
-                borderColor: c.border,
-                borderRadius: theme.radius.md,
-                color: c.text,
-              },
-            ]}
+            {photos.map((photo, index) => (
+              <View
+                key={photo.uri + index}
+                style={[
+                  styles.photoPreviewWrap,
+                  {
+                    backgroundColor: c.surfaceElevated,
+                    borderRadius: theme.radius.lg,
+                  },
+                ]}
+              >
+                <Image source={{ uri: photo.uri }} style={styles.photoPreview} />
+                {index === 0 && (
+                  <View
+                    style={[
+                      styles.coverTag,
+                      { backgroundColor: c.primary, borderRadius: theme.radius.sm },
+                    ]}
+                  >
+                    <Text style={[styles.coverTagText, { color: c.primaryText }]}>
+                      COVER
+                    </Text>
+                  </View>
+                )}
+                <HapticButton
+                  hapticStyle="light"
+                  style={[styles.removePhotoBtn, { backgroundColor: c.overlay }]}
+                  onPress={() => removePhoto(index)}
+                >
+                  <Ionicons name="close" size={14} color="#FFF" />
+                </HapticButton>
+              </View>
+            ))}
+          </ScrollView>
+        </View>
+
+        {/* 3. CATEGORY BLOCK */}
+        <View
+          style={[
+            styles.surfaceBlock,
+            {
+              backgroundColor: c.surface,
+              borderRadius: theme.radius.xl,
+              ...getCardElevation(theme),
+            },
+          ]}
+        >
+          <Text style={[styles.sectionLabel, { color: c.text, marginBottom: 10 }]}>
+            Category
+          </Text>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.chipRow}
+          >
+            {BECHO_CATEGORIES.map((cat) => {
+              const active = category === cat;
+              return (
+                <HapticButton
+                  key={cat}
+                  hapticStyle="selection"
+                  style={[
+                    styles.categoryChip,
+                    {
+                      backgroundColor: active ? c.primaryMuted : c.surfaceElevated,
+                      borderRadius: theme.radius.full,
+                    },
+                  ]}
+                  onPress={() => setCategory(cat)}
+                >
+                  <Text
+                    style={[
+                      styles.categoryText,
+                      { color: active ? c.primary : c.textSecondary },
+                    ]}
+                  >
+                    {cat}
+                  </Text>
+                </HapticButton>
+              );
+            })}
+          </ScrollView>
+        </View>
+
+        {/* 4. DETAILS & PRICING FORM BLOCK */}
+        <View
+          style={[
+            styles.surfaceBlock,
+            {
+              backgroundColor: c.surface,
+              borderRadius: theme.radius.xl,
+              ...getCardElevation(theme),
+            },
+          ]}
+        >
+          <Text style={[styles.sectionLabel, { color: c.text, marginBottom: 14 }]}>
+            Listing Details
+          </Text>
+
+          <NativeInput
+            label="Ad Title *"
+            icon="create-outline"
             placeholder={
               listingType === 'SELL'
                 ? 'e.g. iPhone 15 Pro 256GB - Mint Condition'
-                : 'e.g. Sony A7 III Mirrorless Camera Kit for Rent'
+                : 'e.g. Sony A7 III Mirrorless Camera Kit'
             }
-            placeholderTextColor={c.textMuted}
             value={title}
             onChangeText={setTitle}
             maxLength={90}
+            containerStyle={styles.fieldSpacing}
           />
-        </View>
 
-        <View style={styles.fieldGroup}>
-          <Text style={[styles.label, { color: c.textMuted }]}>Description</Text>
-          <TextInput
-            style={[
-              styles.input,
-              styles.textArea,
-              {
-                backgroundColor: c.surfaceElevated,
-                borderColor: c.border,
-                borderRadius: theme.radius.md,
-                color: c.text,
-              },
-            ]}
-            placeholder="Include condition, age, accessories included, or rental terms..."
-            placeholderTextColor={c.textMuted}
+          <NativeInput
+            label="Description"
+            icon="document-text-outline"
+            placeholder="Condition, age, accessories included, or rental terms..."
             value={description}
             onChangeText={setDescription}
             multiline
             numberOfLines={4}
             textAlignVertical="top"
+            style={styles.textAreaInput}
+            containerStyle={styles.fieldSpacing}
           />
-        </View>
 
-        {/* 5. PRICING (ADAPTS TO SELL vs RENT) */}
-        <View style={styles.fieldGroup}>
-          <Text style={[styles.label, { color: c.textMuted }]}>
-            {listingType === 'SELL' ? 'Selling Price (₹) *' : 'Rent Rate (₹) *'}
-          </Text>
-          <TextInput
-            style={[
-              styles.input,
-              {
-                backgroundColor: c.surfaceElevated,
-                borderColor: c.border,
-                borderRadius: theme.radius.md,
-                color: c.text,
-              },
-            ]}
+          <NativeInput
+            label={listingType === 'SELL' ? 'Selling Price (₹) *' : 'Rent Rate (₹) *'}
+            icon="cash-outline"
             placeholder={listingType === 'SELL' ? 'e.g. 45000' : 'e.g. 1200'}
-            placeholderTextColor={c.textMuted}
             keyboardType="numeric"
             value={price}
             onChangeText={setPrice}
+            containerStyle={listingType === 'RENT' ? styles.fieldSpacing : undefined}
           />
-        </View>
 
-        {listingType === 'RENT' && (
-          <>
-            <View style={styles.fieldGroup}>
-              <Text style={[styles.label, { color: c.textMuted }]}>Billing Period</Text>
-              <View style={styles.periodRow}>
-                {RENT_PERIODS.map((p) => {
-                  const active = rentPeriod === p.value;
-                  return (
-                    <HapticButton
-                      key={p.value}
-                      hapticStyle="selection"
-                      style={[
-                        styles.periodChip,
-                        {
-                          backgroundColor: active ? c.primaryMuted : c.surface,
-                          borderColor: active ? c.primary : c.border,
-                          borderRadius: theme.radius.md,
-                        },
-                      ]}
-                      onPress={() => setRentPeriod(p.value)}
-                    >
-                      <Text
+          {listingType === 'RENT' && (
+            <>
+              <View style={styles.fieldSpacing}>
+                <Text style={[styles.fieldSubLabel, { color: c.textSecondary }]}>
+                  Billing Period
+                </Text>
+                <View style={styles.periodRow}>
+                  {RENT_PERIODS.map((p) => {
+                    const active = rentPeriod === p.value;
+                    return (
+                      <HapticButton
+                        key={p.value}
+                        hapticStyle="selection"
                         style={[
-                          styles.periodText,
-                          { color: active ? c.primary : c.textMuted },
+                          styles.periodChip,
+                          {
+                            backgroundColor: active ? c.primaryMuted : c.surfaceElevated,
+                            borderRadius: theme.radius.md,
+                          },
                         ]}
+                        onPress={() => setRentPeriod(p.value)}
                       >
-                        {p.label}
-                      </Text>
-                    </HapticButton>
-                  );
-                })}
+                        <Text
+                          style={[
+                            styles.periodText,
+                            { color: active ? c.primary : c.textMuted },
+                          ]}
+                        >
+                          {p.label}
+                        </Text>
+                      </HapticButton>
+                    );
+                  })}
+                </View>
               </View>
-            </View>
 
-            <View style={styles.fieldGroup}>
-              <Text style={[styles.label, { color: c.textMuted }]}>
-                Refundable Security Deposit (₹) (optional)
-              </Text>
-              <TextInput
-                style={[
-                  styles.input,
-                  {
-                    backgroundColor: c.surfaceElevated,
-                    borderColor: c.border,
-                    borderRadius: theme.radius.md,
-                    color: c.text,
-                  },
-                ]}
+              <NativeInput
+                label="Refundable Security Deposit (₹)"
+                icon="shield-checkmark-outline"
                 placeholder="e.g. 3000"
-                placeholderTextColor={c.textMuted}
                 keyboardType="numeric"
                 value={securityDeposit}
                 onChangeText={setSecurityDeposit}
               />
-            </View>
-          </>
-        )}
-
-        {/* 6. LOCATION */}
-        <View style={styles.rowBetween}>
-          <Text style={[styles.sectionLabel, { color: c.text }]}>Location</Text>
-          <HapticButton
-            hapticStyle="light"
-            style={[
-              styles.gpsBtn,
-              {
-                backgroundColor: c.surfaceElevated,
-                borderColor: c.border,
-                borderRadius: theme.radius.sm,
-              },
-            ]}
-            onPress={handleDetectLocation}
-            disabled={locating}
-          >
-            {locating ? (
-              <ActivityIndicator size="small" color={c.primary} />
-            ) : (
-              <>
-                <Ionicons name="locate-outline" size={16} color={c.primary} />
-                <Text style={[styles.gpsBtnText, { color: c.primary }]}>
-                  Use Current GPS
-                </Text>
-              </>
-            )}
-          </HapticButton>
+            </>
+          )}
         </View>
 
-        <View style={styles.locationRow}>
-          <View style={{ flex: 1 }}>
-            <Text style={[styles.label, { color: c.textMuted }]}>City *</Text>
-            <TextInput
+        {/* 5. LOCATION BLOCK */}
+        <View
+          style={[
+            styles.surfaceBlock,
+            {
+              backgroundColor: c.surface,
+              borderRadius: theme.radius.xl,
+              ...getCardElevation(theme),
+            },
+          ]}
+        >
+          <View style={styles.rowBetween}>
+            <Text style={[styles.sectionLabel, { color: c.text }]}>Location</Text>
+            <HapticButton
+              hapticStyle="light"
               style={[
-                styles.input,
+                styles.gpsBtn,
                 {
-                  backgroundColor: c.surfaceElevated,
-                  borderColor: c.border,
-                  borderRadius: theme.radius.md,
-                  color: c.text,
+                  backgroundColor: c.primaryMuted,
+                  borderRadius: theme.radius.full,
                 },
               ]}
+              onPress={handleDetectLocation}
+              disabled={locating}
+            >
+              {locating ? (
+                <ActivityIndicator size="small" color={c.primary} />
+              ) : (
+                <>
+                  <Ionicons name="locate" size={14} color={c.primary} />
+                  <Text style={[styles.gpsBtnText, { color: c.primary }]}>Use GPS</Text>
+                </>
+              )}
+            </HapticButton>
+          </View>
+
+          <View style={styles.locationRow}>
+            <NativeInput
+              label="City *"
+              icon="business-outline"
               value={city}
               onChangeText={setCity}
               placeholder="Chennai"
-              placeholderTextColor={c.textMuted}
+              containerStyle={{ flex: 1 }}
             />
-          </View>
-          <View style={{ flex: 1 }}>
-            <Text style={[styles.label, { color: c.textMuted }]}>
-              Neighborhood / Area
-            </Text>
-            <TextInput
-              style={[
-                styles.input,
-                {
-                  backgroundColor: c.surfaceElevated,
-                  borderColor: c.border,
-                  borderRadius: theme.radius.md,
-                  color: c.text,
-                },
-              ]}
+            <NativeInput
+              label="Area"
+              icon="location-outline"
               value={locality}
               onChangeText={setLocality}
-              placeholder="e.g. Adyar, Anna Nagar"
-              placeholderTextColor={c.textMuted}
+              placeholder="Adyar"
+              containerStyle={{ flex: 1 }}
             />
           </View>
         </View>
 
-        {/* SUBMIT BUTTON */}
+        {/* PUBLISH CTA */}
         <HapticButton
           hapticStyle="medium"
           style={[
@@ -655,7 +687,7 @@ export default function PostAdScreen() {
             <ActivityIndicator color={c.primaryText} />
           ) : (
             <>
-              <Ionicons name="checkmark-circle-outline" size={20} color={c.primaryText} />
+              <Ionicons name="checkmark-circle" size={21} color={c.primaryText} />
               <Text style={[styles.publishBtnText, { color: c.primaryText }]}>
                 {listingType === 'SELL' ? 'Publish Sale Ad' : 'Publish Rental Ad'}
               </Text>
@@ -669,7 +701,17 @@ export default function PostAdScreen() {
 
 const styles = StyleSheet.create({
   page: { flex: 1 },
-  container: { padding: 16 },
+  container: { paddingHorizontal: 16, paddingTop: 12, gap: 14 },
+  topStrip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  brandRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  screenTitle: { fontSize: 21, fontWeight: '900', letterSpacing: -0.4 },
+  screenSub: { fontSize: 12, fontWeight: '600', marginTop: 1 },
+  modeBadge: { paddingHorizontal: 11, paddingVertical: 5 },
+  modeBadgeText: { fontSize: 11, fontWeight: '900', letterSpacing: 0.4 },
   authGate: {
     flex: 1,
     alignItems: 'center',
@@ -679,12 +721,11 @@ const styles = StyleSheet.create({
   gateIcon: {
     width: 72,
     height: 72,
-    borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 16,
   },
-  gateTitle: { fontSize: 22, fontWeight: '800' },
+  gateTitle: { fontSize: 22, fontWeight: '900' },
   gateSub: {
     fontSize: 14,
     textAlign: 'center',
@@ -697,30 +738,36 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
   },
   primaryBtnText: { fontSize: 15, fontWeight: '800' },
-  sectionLabel: {
-    fontSize: 15,
-    fontWeight: '700',
-    marginBottom: 10,
-  },
-  helperText: { fontSize: 12 },
-  rowBetween: {
+  segmentTrack: {
     flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginTop: 4,
+    padding: 4,
+    gap: 4,
   },
-  toggleRow: { flexDirection: 'row', gap: 12, marginBottom: 18 },
-  toggleChip: {
+  segmentBtn: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
-    paddingVertical: 13,
-    borderWidth: 1,
+    gap: 7,
+    paddingVertical: 11,
   },
-  toggleText: { fontSize: 15, fontWeight: '800' },
-  photoRow: { gap: 10, paddingBottom: 16 },
+  segmentText: { fontSize: 14, fontWeight: '800' },
+  surfaceBlock: {
+    padding: 16,
+  },
+  rowBetween: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+  },
+  sectionLabel: {
+    fontSize: 15,
+    fontWeight: '800',
+    letterSpacing: -0.2,
+  },
+  helperText: { fontSize: 12, fontWeight: '600' },
+  photoRow: { gap: 10 },
   addPhotoBox: {
     width: 96,
     height: 96,
@@ -730,9 +777,17 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 4,
   },
-  addPhotoText: { fontSize: 12, fontWeight: '700' },
-  photoPreviewWrap: { width: 96, height: 96, overflow: 'hidden', borderWidth: 1 },
+  addPhotoText: { fontSize: 12, fontWeight: '800' },
+  photoPreviewWrap: { width: 96, height: 96, overflow: 'hidden' },
   photoPreview: { width: '100%', height: '100%' },
+  coverTag: {
+    position: 'absolute',
+    bottom: 6,
+    left: 6,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+  },
+  coverTagText: { fontSize: 9, fontWeight: '900', letterSpacing: 0.3 },
   removePhotoBtn: {
     position: 'absolute',
     top: 6,
@@ -743,46 +798,41 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  chipRow: { gap: 8, paddingBottom: 18 },
+  chipRow: { gap: 8 },
   categoryChip: {
     paddingHorizontal: 14,
-    paddingVertical: 9,
-    borderWidth: 1,
+    paddingVertical: 8,
   },
-  categoryText: { fontSize: 13, fontWeight: '700' },
-  fieldGroup: { marginBottom: 14 },
-  label: { fontSize: 13, fontWeight: '600', marginBottom: 6 },
-  input: {
-    borderWidth: 1,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    fontSize: 15,
+  categoryText: { fontSize: 12, fontWeight: '700' },
+  fieldSpacing: { marginBottom: 14 },
+  textAreaInput: { minHeight: 88, paddingTop: 4 },
+  fieldSubLabel: {
+    fontSize: 12,
+    fontWeight: '700',
+    marginBottom: 6,
   },
-  textArea: { minHeight: 96, paddingTop: 12 },
-  periodRow: { flexDirection: 'row', gap: 10 },
+  periodRow: { flexDirection: 'row', gap: 8 },
   periodChip: {
     flex: 1,
     paddingVertical: 10,
-    borderWidth: 1,
     alignItems: 'center',
   },
-  periodText: { fontSize: 13, fontWeight: '700' },
+  periodText: { fontSize: 13, fontWeight: '800' },
   gpsBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 5,
-    paddingHorizontal: 10,
+    paddingHorizontal: 11,
     paddingVertical: 6,
-    borderWidth: 1,
   },
-  gpsBtnText: { fontSize: 12, fontWeight: '700' },
-  locationRow: { flexDirection: 'row', gap: 10, marginTop: 6, marginBottom: 22 },
+  gpsBtnText: { fontSize: 12, fontWeight: '800' },
+  locationRow: { flexDirection: 'row', gap: 10 },
   publishBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    paddingVertical: 15,
+    paddingVertical: 16,
   },
-  publishBtnText: { fontSize: 16, fontWeight: '800' },
+  publishBtnText: { fontSize: 16, fontWeight: '900' },
 });

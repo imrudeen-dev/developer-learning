@@ -14,7 +14,7 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { HapticButton, ScreenHeader } from '../../components/NativeUI';
+import { HapticButton } from '../../components/NativeUI';
 import { useAuth } from '../../lib/auth-context';
 import { formatTimeAgo } from '../../lib/listings';
 import { supabase } from '../../lib/supabase';
@@ -50,10 +50,11 @@ export default function ChatThreadScreen() {
     peerId || sellerId || null
   );
   const [listingTitle, setListingTitle] = useState<string>(title || 'Listing Chat');
+  const [peerName, setPeerName] = useState<string>('Becho Member');
 
   const listRef = useRef<FlatList<ChatMessage>>(null);
 
-  // Resolve listing title & counterparty ID if opened from inbox
+  // Resolve listing title & counterparty ID/name if opened from inbox
   useEffect(() => {
     if (!listingId || !user) return;
     let active = true;
@@ -70,11 +71,13 @@ export default function ChatThreadScreen() {
         setListingTitle(listingRow.title);
       }
 
-      if (!resolvedPeerId && listingRow) {
+      let candidatePeerId = resolvedPeerId;
+
+      if (!candidatePeerId && listingRow) {
         if (listingRow.seller_id !== user.id) {
+          candidatePeerId = listingRow.seller_id;
           setResolvedPeerId(listingRow.seller_id);
         } else {
-          // Seller opened thread: find the buyer from existing messages
           const { data: latestMsg } = await supabase
             .from('messages')
             .select('sender_id, receiver_id')
@@ -86,8 +89,20 @@ export default function ChatThreadScreen() {
           if (active && latestMsg) {
             const buyer =
               latestMsg.sender_id === user.id ? latestMsg.receiver_id : latestMsg.sender_id;
+            candidatePeerId = buyer;
             setResolvedPeerId(buyer);
           }
+        }
+      }
+
+      if (active && candidatePeerId) {
+        const { data: profileRow } = await supabase
+          .from('profiles')
+          .select('full_name')
+          .eq('id', candidatePeerId)
+          .maybeSingle();
+        if (active && profileRow?.full_name) {
+          setPeerName(profileRow.full_name);
         }
       }
     })();
@@ -238,43 +253,65 @@ export default function ChatThreadScreen() {
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       keyboardVerticalOffset={Platform.OS === 'ios' ? 64 : 0}
     >
-      {/* HEADER */}
-      <ScreenHeader
-        title={listingTitle}
-        subtitle="Live Becho Chat"
-        leftAction={
-          <HapticButton
-            hapticStyle="light"
-            style={[
-              styles.backBtn,
-              {
-                backgroundColor: c.surfaceElevated,
-                borderColor: c.border,
-                borderRadius: theme.radius.md,
-              },
-            ]}
-            onPress={() => router.back()}
-          >
-            <Ionicons name="arrow-back" size={20} color={c.text} />
-          </HapticButton>
-        }
-        rightAction={
-          <HapticButton
-            hapticStyle="light"
-            style={[
-              styles.backBtn,
-              {
-                backgroundColor: c.surfaceElevated,
-                borderColor: c.border,
-                borderRadius: theme.radius.md,
-              },
-            ]}
-            onPress={() => router.push(`/listing/${listingId}`)}
-          >
-            <Ionicons name="pricetag-outline" size={18} color={c.primary} />
-          </HapticButton>
-        }
-      />
+      {/* NATIVE CHAT HEADER */}
+      <View
+        style={[
+          styles.header,
+          {
+            backgroundColor: c.surface,
+            paddingTop: Math.max(insets.top, 12),
+            ...getCardElevation(theme),
+          },
+        ]}
+      >
+        <HapticButton
+          hapticStyle="light"
+          style={[
+            styles.iconCircleBtn,
+            { backgroundColor: c.surfaceElevated },
+          ]}
+          onPress={() => router.back()}
+        >
+          <Ionicons name="arrow-back" size={20} color={c.text} />
+        </HapticButton>
+
+        <View
+          style={[
+            styles.peerAvatar,
+            { borderColor: c.primary, backgroundColor: c.primaryMuted },
+          ]}
+        >
+          <Text style={[styles.peerInitial, { color: c.primary }]}>
+            {peerName[0].toUpperCase()}
+          </Text>
+        </View>
+
+        <View style={{ flex: 1 }}>
+          <Text style={[styles.headerTitle, { color: c.text }]} numberOfLines={1}>
+            {peerName}
+          </Text>
+          <View style={styles.subRow}>
+            <View style={[styles.liveDot, { backgroundColor: c.primary }]} />
+            <Text
+              style={[styles.headerSub, { color: c.textMuted }]}
+              numberOfLines={1}
+            >
+              {listingTitle}
+            </Text>
+          </View>
+        </View>
+
+        <HapticButton
+          hapticStyle="light"
+          style={[
+            styles.iconCircleBtn,
+            { backgroundColor: c.surfaceElevated },
+          ]}
+          onPress={() => router.push(`/listing/${listingId}`)}
+        >
+          <Ionicons name="pricetag-outline" size={18} color={c.primary} />
+        </HapticButton>
+      </View>
 
       {loading ? (
         <View style={styles.centered}>
@@ -308,7 +345,6 @@ export default function ChatThreadScreen() {
                           styles.bubbleTheirs,
                           {
                             backgroundColor: c.surface,
-                            borderColor: c.border,
                             borderRadius: theme.radius.lg,
                             ...getCardElevation(theme),
                           },
@@ -346,12 +382,12 @@ export default function ChatThreadScreen() {
                   styles.emptyIconWrap,
                   {
                     backgroundColor: c.surface,
-                    borderColor: c.border,
                     borderRadius: theme.radius.xl,
+                    ...getCardElevation(theme),
                   },
                 ]}
               >
-                <Ionicons name="chatbubbles-outline" size={36} color={c.primary} />
+                <Ionicons name="chatbubbles-outline" size={34} color={c.primary} />
               </View>
               <Text style={[styles.emptyTitle, { color: c.text }]}>
                 Start the conversation
@@ -364,14 +400,14 @@ export default function ChatThreadScreen() {
         />
       )}
 
-      {/* INPUT COMPOSER */}
+      {/* NATIVE INPUT COMPOSER */}
       <View
         style={[
           styles.composer,
           {
             backgroundColor: c.surface,
-            borderTopColor: c.border,
             paddingBottom: Math.max(insets.bottom, 10),
+            ...getCardElevation(theme),
           },
         ]}
       >
@@ -380,12 +416,11 @@ export default function ChatThreadScreen() {
             styles.composerInput,
             {
               backgroundColor: c.surfaceElevated,
-              borderColor: c.border,
-              borderRadius: theme.radius.lg,
+              borderRadius: theme.radius.xl,
               color: c.text,
             },
           ]}
-          placeholder="Write a message..."
+          placeholder="Message..."
           placeholderTextColor={c.textMuted}
           value={draft}
           onChangeText={setDraft}
@@ -421,19 +456,39 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     padding: 24,
   },
-  gateText: { fontSize: 15, marginBottom: 14 },
+  gateText: { fontSize: 15, marginBottom: 14, fontWeight: '600' },
   signInBtn: {
     paddingHorizontal: 22,
     paddingVertical: 12,
   },
   signInBtnText: { fontWeight: '800' },
-  backBtn: {
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingHorizontal: 14,
+    paddingBottom: 12,
+  },
+  iconCircleBtn: {
     width: 38,
     height: 38,
-    borderWidth: 1,
+    borderRadius: 19,
     alignItems: 'center',
     justifyContent: 'center',
   },
+  peerAvatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    borderWidth: 1.5,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  peerInitial: { fontSize: 16, fontWeight: '900' },
+  headerTitle: { fontSize: 15, fontWeight: '800', letterSpacing: -0.2 },
+  subRow: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 2 },
+  liveDot: { width: 6, height: 6, borderRadius: 3 },
+  headerSub: { fontSize: 11, fontWeight: '600', flex: 1 },
   messageList: { padding: 14, paddingBottom: 20, gap: 10 },
   bubbleRow: { flexDirection: 'row' },
   rowMine: { justifyContent: 'flex-end' },
@@ -447,21 +502,19 @@ const styles = StyleSheet.create({
     borderBottomRightRadius: 4,
   },
   bubbleTheirs: {
-    borderWidth: 1,
     borderBottomLeftRadius: 4,
   },
   bubbleText: { fontSize: 14, lineHeight: 20 },
-  timeText: { fontSize: 10, marginTop: 4, alignSelf: 'flex-end' },
+  timeText: { fontSize: 10, marginTop: 4, alignSelf: 'flex-end', fontWeight: '600' },
   emptyChat: { alignItems: 'center', paddingTop: 72, paddingHorizontal: 24 },
   emptyIconWrap: {
     width: 68,
     height: 68,
-    borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 4,
   },
-  emptyTitle: { fontSize: 16, fontWeight: '700', marginTop: 10 },
+  emptyTitle: { fontSize: 16, fontWeight: '800', marginTop: 10 },
   emptySub: {
     fontSize: 13,
     textAlign: 'center',
@@ -474,20 +527,19 @@ const styles = StyleSheet.create({
     gap: 10,
     paddingHorizontal: 14,
     paddingTop: 10,
-    borderTopWidth: 1,
   },
   composerInput: {
     flex: 1,
     maxHeight: 100,
-    borderWidth: 1,
-    paddingHorizontal: 14,
+    paddingHorizontal: 16,
     paddingVertical: 10,
     fontSize: 14,
+    fontWeight: '500',
   },
   sendBtn: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     alignItems: 'center',
     justifyContent: 'center',
   },

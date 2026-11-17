@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useRouter } from 'expo-router';
-import { useCallback, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -10,7 +10,11 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { BechoLogoMark, HapticButton, ScreenHeader } from '../../components/NativeUI';
+import {
+  BechoLogoMark,
+  HapticButton,
+  NativeInput,
+} from '../../components/NativeUI';
 import { useAuth } from '../../lib/auth-context';
 import { formatTimeAgo } from '../../lib/listings';
 import { supabase } from '../../lib/supabase';
@@ -34,6 +38,7 @@ export default function ChatsInboxScreen() {
   const c = theme.colors;
 
   const [threads, setThreads] = useState<ThreadSummary[]>([]);
+  const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -119,21 +124,32 @@ export default function ChatsInboxScreen() {
     }, [loadThreads])
   );
 
+  const filteredThreads = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return threads;
+    return threads.filter(
+      (t) =>
+        t.peerName.toLowerCase().includes(q) ||
+        t.listingTitle.toLowerCase().includes(q) ||
+        t.lastMessage.toLowerCase().includes(q)
+    );
+  }, [threads, searchQuery]);
+
   if (!user) {
     return (
       <View style={[styles.page, { backgroundColor: c.bg }]}>
-        <ScreenHeader
-          title="Messages"
-          subtitle="Direct buyer & seller chat"
-          leftAction={<BechoLogoMark size={34} />}
-        />
+        <View style={styles.topStrip}>
+          <View style={styles.brandRow}>
+            <BechoLogoMark size={36} />
+            <Text style={[styles.screenTitle, { color: c.text }]}>Messages</Text>
+          </View>
+        </View>
         <View style={styles.centered}>
           <View
             style={[
               styles.gateIcon,
               {
                 backgroundColor: c.surface,
-                borderColor: c.border,
                 borderRadius: theme.radius.xl,
                 ...getCardElevation(theme),
               },
@@ -151,7 +167,11 @@ export default function ChatsInboxScreen() {
             hapticStyle="medium"
             style={[
               styles.primaryBtn,
-              { backgroundColor: c.primary, borderRadius: theme.radius.md },
+              {
+                backgroundColor: c.primary,
+                borderRadius: theme.radius.md,
+                ...getCardElevation(theme),
+              },
             ]}
             onPress={() => router.push('/(tabs)/profile')}
           >
@@ -165,11 +185,12 @@ export default function ChatsInboxScreen() {
   if (loading) {
     return (
       <View style={[styles.page, { backgroundColor: c.bg }]}>
-        <ScreenHeader
-          title="Messages"
-          subtitle="Loading conversations..."
-          leftAction={<BechoLogoMark size={34} />}
-        />
+        <View style={styles.topStrip}>
+          <View style={styles.brandRow}>
+            <BechoLogoMark size={36} />
+            <Text style={[styles.screenTitle, { color: c.text }]}>Messages</Text>
+          </View>
+        </View>
         <View style={styles.centered}>
           <ActivityIndicator size="large" color={c.primary} />
         </View>
@@ -179,22 +200,49 @@ export default function ChatsInboxScreen() {
 
   return (
     <View style={[styles.page, { backgroundColor: c.bg }]}>
-      <ScreenHeader
-        title="Messages"
-        subtitle={
-          threads.length > 0
-            ? `${threads.length} active ${threads.length === 1 ? 'thread' : 'threads'}`
-            : 'Buyer & seller inbox'
-        }
-        leftAction={<BechoLogoMark size={34} />}
-      />
+      {/* TOP BRAND HEADER */}
+      <View style={styles.topStrip}>
+        <View style={styles.brandRow}>
+          <BechoLogoMark size={36} />
+          <View>
+            <Text style={[styles.screenTitle, { color: c.text }]}>Messages</Text>
+            <Text style={[styles.screenSub, { color: c.textMuted }]}>
+              {threads.length > 0
+                ? `${threads.length} active ${threads.length === 1 ? 'chat' : 'chats'}`
+                : 'Buyer & seller inbox'}
+            </Text>
+          </View>
+        </View>
+      </View>
+
+      {/* SEARCH INBOX */}
+      {threads.length > 0 && (
+        <View style={styles.searchWrap}>
+          <NativeInput
+            icon="search-outline"
+            placeholder="Search people, ads, or messages..."
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+            rightElement={
+              searchQuery.length > 0 ? (
+                <HapticButton
+                  hapticStyle="selection"
+                  onPress={() => setSearchQuery('')}
+                >
+                  <Ionicons name="close-circle" size={18} color={c.textMuted} />
+                </HapticButton>
+              ) : undefined
+            }
+          />
+        </View>
+      )}
 
       <FlatList
-        data={threads}
+        data={filteredThreads}
         keyExtractor={(item) => item.key}
         contentContainerStyle={[
           styles.listContent,
-          { paddingBottom: 32 + insets.bottom },
+          { paddingBottom: 104 + insets.bottom },
         ]}
         showsVerticalScrollIndicator={false}
         refreshControl={
@@ -209,12 +257,12 @@ export default function ChatsInboxScreen() {
         renderItem={({ item }) => (
           <HapticButton
             hapticStyle="light"
+            scaleTo={0.98}
             style={[
               styles.threadCard,
               {
                 backgroundColor: c.surface,
-                borderColor: c.border,
-                borderRadius: theme.radius.lg,
+                borderRadius: theme.radius.xl,
                 ...getCardElevation(theme),
               },
             ]}
@@ -229,11 +277,17 @@ export default function ChatsInboxScreen() {
               })
             }
           >
-            <View style={[styles.avatar, { backgroundColor: c.primaryMuted }]}>
+            <View
+              style={[
+                styles.avatarRing,
+                { borderColor: c.primary, backgroundColor: c.primaryMuted },
+              ]}
+            >
               <Text style={[styles.avatarText, { color: c.primary }]}>
                 {item.peerName[0].toUpperCase()}
               </Text>
             </View>
+
             <View style={{ flex: 1 }}>
               <View style={styles.rowBetween}>
                 <Text style={[styles.peerName, { color: c.text }]} numberOfLines={1}>
@@ -243,24 +297,43 @@ export default function ChatsInboxScreen() {
                   {formatTimeAgo(item.lastAt)}
                 </Text>
               </View>
-              <Text style={[styles.listingSub, { color: c.primary }]} numberOfLines={1}>
-                {item.listingTitle}
-              </Text>
-              <Text style={[styles.preview, { color: c.textMuted }]} numberOfLines={1}>
+
+              <View
+                style={[
+                  styles.listingChip,
+                  { backgroundColor: c.surfaceElevated, borderRadius: theme.radius.sm },
+                ]}
+              >
+                <Text style={[styles.listingSub, { color: c.primary }]} numberOfLines={1}>
+                  {item.listingTitle}
+                </Text>
+              </View>
+
+              <Text style={[styles.preview, { color: c.textSecondary }]} numberOfLines={1}>
                 {item.lastMessage}
               </Text>
             </View>
+
             <Ionicons name="chevron-forward" size={18} color={c.textMuted} />
           </HapticButton>
         )}
         ListEmptyComponent={
-          <View style={styles.emptyBox}>
-            <Ionicons name="chatbox-ellipses-outline" size={44} color={c.textMuted} />
+          <View
+            style={[
+              styles.emptyBox,
+              { backgroundColor: c.surface, borderRadius: theme.radius.xl },
+            ]}
+          >
+            <View style={[styles.emptyIconCircle, { backgroundColor: c.primaryMuted }]}>
+              <Ionicons name="chatbox-ellipses-outline" size={32} color={c.primary} />
+            </View>
             <Text style={[styles.emptyTitle, { color: c.text }]}>
-              No conversations yet
+              {searchQuery ? 'No matching chats' : 'No conversations yet'}
             </Text>
             <Text style={[styles.emptySub, { color: c.textMuted }]}>
-              Open any listing on Home and tap &ldquo;Chat with Seller&rdquo; to start.
+              {searchQuery
+                ? 'Try a different keyword or clear search.'
+                : 'Open any listing on Home and tap "Chat with Seller" to start.'}
             </Text>
           </View>
         }
@@ -271,47 +344,68 @@ export default function ChatsInboxScreen() {
 
 const styles = StyleSheet.create({
   page: { flex: 1 },
+  topStrip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    paddingBottom: 8,
+  },
+  brandRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  screenTitle: { fontSize: 21, fontWeight: '900', letterSpacing: -0.4 },
+  screenSub: { fontSize: 12, fontWeight: '600', marginTop: 1 },
+  searchWrap: {
+    paddingHorizontal: 16,
+    paddingBottom: 6,
+  },
   centered: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
     padding: 24,
   },
-  listContent: { padding: 14, gap: 10 },
+  listContent: { paddingHorizontal: 16, paddingTop: 6, gap: 12 },
   threadCard: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-    borderWidth: 1,
-    padding: 13,
+    padding: 14,
   },
-  avatar: {
-    width: 46,
-    height: 46,
-    borderRadius: 23,
+  avatarRing: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    borderWidth: 1.5,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  avatarText: { fontSize: 18, fontWeight: '800' },
+  avatarText: { fontSize: 19, fontWeight: '900' },
   rowBetween: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: 8,
   },
-  peerName: { fontSize: 15, fontWeight: '700', flex: 1 },
-  time: { fontSize: 11 },
-  listingSub: { fontSize: 12, fontWeight: '700', marginTop: 2 },
-  preview: { fontSize: 13, marginTop: 3 },
+  peerName: { fontSize: 15, fontWeight: '800', flex: 1, letterSpacing: -0.2 },
+  time: { fontSize: 11, fontWeight: '600' },
+  listingChip: {
+    alignSelf: 'flex-start',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    marginTop: 4,
+    maxWidth: '95%',
+  },
+  listingSub: { fontSize: 11, fontWeight: '700' },
+  preview: { fontSize: 13, marginTop: 5, fontWeight: '500' },
   gateIcon: {
     width: 72,
     height: 72,
-    borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 4,
   },
-  gateTitle: { fontSize: 18, fontWeight: '800', marginTop: 12 },
+  gateTitle: { fontSize: 19, fontWeight: '900', marginTop: 12 },
   gateSub: {
     fontSize: 13,
     textAlign: 'center',
@@ -321,15 +415,27 @@ const styles = StyleSheet.create({
   },
   primaryBtn: {
     paddingHorizontal: 26,
-    paddingVertical: 12,
+    paddingVertical: 13,
   },
   primaryBtnText: { fontWeight: '800', fontSize: 15 },
-  emptyBox: { alignItems: 'center', paddingTop: 72, paddingHorizontal: 24 },
-  emptyTitle: { fontSize: 16, fontWeight: '700', marginTop: 10 },
+  emptyBox: {
+    alignItems: 'center',
+    marginTop: 28,
+    paddingVertical: 36,
+    paddingHorizontal: 24,
+  },
+  emptyIconCircle: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  emptyTitle: { fontSize: 16, fontWeight: '800', marginTop: 14 },
   emptySub: {
     fontSize: 13,
     textAlign: 'center',
-    marginTop: 4,
+    marginTop: 6,
     lineHeight: 19,
   },
 });

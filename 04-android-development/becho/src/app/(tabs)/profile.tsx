@@ -11,11 +11,15 @@ import {
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { BechoLogoMark, HapticButton, ScreenHeader } from '../../components/NativeUI';
+import {
+  BechoLogoMark,
+  HapticButton,
+  NativeBottomSheet,
+  NativeInput,
+} from '../../components/NativeUI';
 import { useAuth } from '../../lib/auth-context';
 import { Listing, formatListingPrice } from '../../lib/listings';
 import { supabase } from '../../lib/supabase';
@@ -40,6 +44,9 @@ export default function ProfileScreen() {
   const [editPhone, setEditPhone] = useState('');
   const [editCity, setEditCity] = useState('Chennai');
   const [savingProfile, setSavingProfile] = useState(false);
+
+  // Theme bottom sheet state
+  const [themeSheetOpen, setThemeSheetOpen] = useState(false);
 
   // My Ads state
   const [myListings, setMyListings] = useState<Listing[]>([]);
@@ -214,42 +221,13 @@ export default function ProfileScreen() {
     await supabase.auth.signOut();
   };
 
-  const renderThemeCard = () => (
-    <View
-      style={[
-        styles.card,
-        {
-          backgroundColor: c.surface,
-          borderColor: c.border,
-          borderRadius: theme.radius.lg,
-          ...getCardElevation(theme),
-        },
-      ]}
+  const renderThemeBottomSheet = () => (
+    <NativeBottomSheet
+      visible={themeSheetOpen}
+      onClose={() => setThemeSheetOpen(false)}
+      title="Choose Android Theme"
     >
-      <View style={[styles.rowBetween, { marginBottom: 12 }]}>
-        <View style={{ flex: 1 }}>
-          <Text style={[styles.sectionTitle, { color: c.text, marginBottom: 2 }]}>
-            Appearance & Theme
-          </Text>
-          <Text style={{ color: c.textMuted, fontSize: 12 }}>
-            Live Android surface & accent tokens
-          </Text>
-        </View>
-        <View
-          style={{
-            paddingHorizontal: 10,
-            paddingVertical: 4,
-            borderRadius: theme.radius.full,
-            backgroundColor: c.primaryMuted,
-          }}
-        >
-          <Text style={{ color: c.primary, fontSize: 11, fontWeight: '700' }}>
-            {theme.name}
-          </Text>
-        </View>
-      </View>
-
-      <View style={{ gap: 10 }}>
+      <View style={{ gap: 10, paddingBottom: 6 }}>
         {(Object.keys(BECHO_THEMES) as ThemeId[]).map((id) => {
           const item = BECHO_THEMES[id];
           const active = themeId === id;
@@ -257,42 +235,41 @@ export default function ProfileScreen() {
             <HapticButton
               key={id}
               hapticStyle="selection"
-              onPress={() => setThemeId(id)}
-              style={{
-                flexDirection: 'row',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                padding: 12,
-                borderRadius: theme.radius.md,
-                borderWidth: 1.5,
-                backgroundColor: active ? c.primaryMuted : c.surfaceElevated,
-                borderColor: active ? c.primary : c.border,
+              scaleTo={0.98}
+              onPress={() => {
+                setThemeId(id);
+                setThemeSheetOpen(false);
               }}
+              style={[
+                styles.themeOptionRow,
+                {
+                  backgroundColor: active ? c.primaryMuted : c.surfaceElevated,
+                  borderRadius: theme.radius.lg,
+                },
+              ]}
             >
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1 }}>
+              <View style={styles.themeOptionLeft}>
                 <View
-                  style={{
-                    width: 24,
-                    height: 24,
-                    borderRadius: 12,
-                    backgroundColor: item.colors.primary,
-                    borderWidth: 2,
-                    borderColor: item.colors.bg,
-                  }}
+                  style={[
+                    styles.themeSwatch,
+                    {
+                      backgroundColor: item.colors.primary,
+                      borderColor: item.colors.bg,
+                    },
+                  ]}
                 />
                 <View style={{ flex: 1 }}>
-                  <Text style={{ color: c.text, fontSize: 14, fontWeight: '700' }}>
+                  <Text style={[styles.themeOptionTitle, { color: c.text }]}>
                     {item.name}
                   </Text>
                   <Text
-                    style={{ color: c.textMuted, fontSize: 11, marginTop: 1 }}
+                    style={[styles.themeOptionSub, { color: c.textMuted }]}
                     numberOfLines={1}
                   >
                     {item.tagline}
                   </Text>
                 </View>
               </View>
-
               <Ionicons
                 name={active ? 'checkmark-circle' : 'ellipse-outline'}
                 size={22}
@@ -302,7 +279,7 @@ export default function ProfileScreen() {
           );
         })}
       </View>
-    </View>
+    </NativeBottomSheet>
   );
 
   if (loading) {
@@ -320,178 +297,251 @@ export default function ProfileScreen() {
         style={{ flex: 1, backgroundColor: c.bg }}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
-        <ScreenHeader
-          title="Account"
-          subtitle="Sign in to post & manage ads"
-          leftAction={<BechoLogoMark size={34} />}
-        />
         <ScrollView
           contentContainerStyle={[
             styles.authContainer,
-            { paddingBottom: 36 + insets.bottom },
+            { paddingBottom: 96 + insets.bottom },
           ]}
           keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
         >
-          <View style={{ alignItems: 'center', marginBottom: 16 }}>
+          <View style={styles.authHero}>
             <BechoLogoMark size={64} />
+            <Text style={[styles.brandTitle, { color: c.text }]}>
+              {isSignUp ? 'Create your account' : 'Welcome to Becho'}
+            </Text>
+            <Text style={[styles.brandSub, { color: c.textMuted }]}>
+              Buy, sell, and rent locally with instant chat.
+            </Text>
           </View>
-          <Text style={[styles.brandTitle, { color: c.text }]}>
-            {isSignUp ? 'Create your Becho account' : 'Sign in to Becho'}
-          </Text>
-          <Text style={[styles.brandSub, { color: c.textMuted }]}>
-            Buy, sell, and rent locally with instant chat.
-          </Text>
 
-          {isSignUp && (
-            <View style={styles.fieldGroup}>
-              <Text style={[styles.label, { color: c.textMuted }]}>Full Name</Text>
-              <TextInput
-                style={[
-                  styles.input,
-                  {
-                    backgroundColor: c.surfaceElevated,
-                    borderColor: c.border,
-                    color: c.text,
-                  },
-                ]}
+          <View
+            style={[
+              styles.surfaceBlock,
+              {
+                backgroundColor: c.surface,
+                borderRadius: theme.radius.xl,
+                ...getCardElevation(theme),
+              },
+            ]}
+          >
+            {isSignUp && (
+              <NativeInput
+                label="Full Name"
+                icon="person-outline"
                 placeholder="e.g. Imrudeen"
-                placeholderTextColor={c.textMuted}
                 value={fullName}
                 onChangeText={setFullName}
+                containerStyle={styles.fieldSpacing}
               />
-            </View>
-          )}
+            )}
 
-          <View style={styles.fieldGroup}>
-            <Text style={[styles.label, { color: c.textMuted }]}>Email</Text>
-            <TextInput
-              style={[
-                styles.input,
-                {
-                  backgroundColor: c.surfaceElevated,
-                  borderColor: c.border,
-                  color: c.text,
-                },
-              ]}
+            <NativeInput
+              label="Email"
+              icon="mail-outline"
               placeholder="you@example.com"
-              placeholderTextColor={c.textMuted}
               autoCapitalize="none"
               keyboardType="email-address"
               value={email}
               onChangeText={setEmail}
+              containerStyle={styles.fieldSpacing}
             />
-          </View>
 
-          <View style={styles.fieldGroup}>
-            <Text style={[styles.label, { color: c.textMuted }]}>Password</Text>
-            <TextInput
-              style={[
-                styles.input,
-                {
-                  backgroundColor: c.surfaceElevated,
-                  borderColor: c.border,
-                  color: c.text,
-                },
-              ]}
+            <NativeInput
+              label="Password"
+              icon="lock-closed-outline"
               placeholder="Minimum 6 characters"
-              placeholderTextColor={c.textMuted}
               secureTextEntry
               value={password}
               onChangeText={setPassword}
+              containerStyle={styles.fieldSpacing}
             />
+
+            <HapticButton
+              hapticStyle="medium"
+              style={[
+                styles.primaryBtn,
+                {
+                  backgroundColor: c.primary,
+                  borderRadius: theme.radius.md,
+                  ...getCardElevation(theme),
+                },
+                authSubmitting && { opacity: 0.7 },
+              ]}
+              onPress={handleAuth}
+              disabled={authSubmitting}
+            >
+              {authSubmitting ? (
+                <ActivityIndicator color={c.primaryText} />
+              ) : (
+                <Text style={[styles.primaryBtnText, { color: c.primaryText }]}>
+                  {isSignUp ? 'Create Account' : 'Sign In'}
+                </Text>
+              )}
+            </HapticButton>
+
+            <HapticButton
+              hapticStyle="selection"
+              style={styles.switchBtn}
+              onPress={() => setIsSignUp((prev) => !prev)}
+            >
+              <Text style={[styles.switchText, { color: c.primary }]}>
+                {isSignUp
+                  ? 'Already have an account? Sign In'
+                  : 'New to Becho? Create an account'}
+              </Text>
+            </HapticButton>
           </View>
 
+          {/* THEME SHEET TRIGGER */}
           <HapticButton
-            hapticStyle="medium"
+            hapticStyle="light"
             style={[
-              styles.primaryBtn,
-              { backgroundColor: c.primary },
-              authSubmitting && { opacity: 0.7 },
+              styles.quickRowCard,
+              {
+                backgroundColor: c.surface,
+                borderRadius: theme.radius.lg,
+                ...getCardElevation(theme),
+              },
             ]}
-            onPress={handleAuth}
-            disabled={authSubmitting}
+            onPress={() => setThemeSheetOpen(true)}
           >
-            {authSubmitting ? (
-              <ActivityIndicator color={c.primaryText} />
-            ) : (
-              <Text style={[styles.primaryBtnText, { color: c.primaryText }]}>
-                {isSignUp ? 'Create Account' : 'Sign In'}
-              </Text>
-            )}
+            <View style={[styles.quickIconBox, { backgroundColor: c.primaryMuted }]}>
+              <Ionicons name="color-palette-outline" size={20} color={c.primary} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.quickTitle, { color: c.text }]}>App Theme</Text>
+              <Text style={[styles.quickSub, { color: c.textMuted }]}>{theme.name}</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color={c.textMuted} />
           </HapticButton>
 
-          <HapticButton
-            hapticStyle="selection"
-            style={styles.switchBtn}
-            onPress={() => setIsSignUp((prev) => !prev)}
-          >
-            <Text style={[styles.switchText, { color: c.primary }]}>
-              {isSignUp
-                ? 'Already have an account? Sign In'
-                : 'New to Becho? Create an account'}
-            </Text>
-          </HapticButton>
-
-          <View style={{ marginTop: 24 }}>{renderThemeCard()}</View>
+          {renderThemeBottomSheet()}
         </ScrollView>
       </KeyboardAvoidingView>
     );
   }
 
   // LOGGED-IN VIEW
+  const initial = (profile?.full_name || user.email || 'B')[0].toUpperCase();
+
   return (
     <View style={[styles.page, { backgroundColor: c.bg }]}>
-      <ScreenHeader
-        title="Profile & Settings"
-        subtitle={profile?.city ? `${profile.city} • Becho Member` : 'Becho Member'}
-        leftAction={<BechoLogoMark size={34} />}
-      />
-
       <ScrollView
         contentContainerStyle={[
           styles.profileContainer,
-          { paddingBottom: 36 + insets.bottom },
+          { paddingBottom: 96 + insets.bottom },
         ]}
         keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
       >
-        {/* USER SUMMARY CARD */}
+        {/* TOP BRAND STRIP */}
+        <View style={styles.topStrip}>
+          <View style={styles.brandRow}>
+            <BechoLogoMark size={36} />
+            <Text style={[styles.screenTitle, { color: c.text }]}>Profile</Text>
+          </View>
+
+          <HapticButton
+            hapticStyle="selection"
+            style={[
+              styles.themePill,
+              {
+                backgroundColor: c.surface,
+                borderRadius: theme.radius.full,
+                ...getCardElevation(theme),
+              },
+            ]}
+            onPress={() => setThemeSheetOpen(true)}
+          >
+            <Ionicons name="color-palette" size={14} color={c.primary} />
+            <Text style={[styles.themePillText, { color: c.text }]}>{theme.name}</Text>
+          </HapticButton>
+        </View>
+
+        {/* USER HERO CARD */}
         <View
           style={[
-            styles.card,
+            styles.heroCard,
             {
               backgroundColor: c.surface,
-              borderColor: c.border,
-              borderRadius: theme.radius.lg,
+              borderRadius: theme.radius.xl,
               ...getCardElevation(theme),
             },
           ]}
         >
           <View style={styles.avatarRow}>
-            <View style={[styles.avatarCircle, { backgroundColor: c.primaryMuted }]}>
-              <Text style={[styles.avatarInitial, { color: c.primary }]}>
-                {(profile?.full_name || user.email || 'B')[0].toUpperCase()}
-              </Text>
+            <View
+              style={[
+                styles.avatarRing,
+                { borderColor: c.primary, backgroundColor: c.primaryMuted },
+              ]}
+            >
+              <Text style={[styles.avatarInitial, { color: c.primary }]}>{initial}</Text>
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={[styles.userName, { color: c.text }]}>
+              <Text style={[styles.userName, { color: c.text }]} numberOfLines={1}>
                 {profile?.full_name || 'Becho Member'}
               </Text>
-              <Text style={[styles.userEmail, { color: c.textMuted }]}>{user.email}</Text>
+              <Text style={[styles.userEmail, { color: c.textMuted }]} numberOfLines={1}>
+                {user.email}
+              </Text>
+              <View style={styles.cityTagRow}>
+                <Ionicons name="location" size={12} color={c.primary} />
+                <Text style={[styles.cityTagText, { color: c.textSecondary }]}>
+                  {profile?.city || 'Chennai'}
+                </Text>
+              </View>
             </View>
           </View>
-        </View>
 
-        {/* APPEARANCE & MULTI-THEME CARD */}
-        {renderThemeCard()}
+          {/* QUICK ACTION TILES */}
+          <View style={styles.quickGrid}>
+            <HapticButton
+              hapticStyle="light"
+              style={[
+                styles.quickTile,
+                { backgroundColor: c.surfaceElevated, borderRadius: theme.radius.md },
+              ]}
+              onPress={() => router.push('/(tabs)/post')}
+            >
+              <Ionicons name="add-circle" size={20} color={c.primary} />
+              <Text style={[styles.quickTileLabel, { color: c.text }]}>Post Ad</Text>
+            </HapticButton>
+
+            <HapticButton
+              hapticStyle="light"
+              style={[
+                styles.quickTile,
+                { backgroundColor: c.surfaceElevated, borderRadius: theme.radius.md },
+              ]}
+              onPress={() => router.push('/(tabs)/chats')}
+            >
+              <Ionicons name="chatbubbles" size={20} color={c.rentBadge} />
+              <Text style={[styles.quickTileLabel, { color: c.text }]}>Inbox</Text>
+            </HapticButton>
+
+            <HapticButton
+              hapticStyle="light"
+              style={[
+                styles.quickTile,
+                { backgroundColor: c.surfaceElevated, borderRadius: theme.radius.md },
+              ]}
+              onPress={() => setThemeSheetOpen(true)}
+            >
+              <Ionicons name="color-palette" size={20} color={c.sellBadge} />
+              <Text style={[styles.quickTileLabel, { color: c.text }]}>Themes</Text>
+            </HapticButton>
+          </View>
+        </View>
 
         {/* MY LISTINGS MANAGEMENT */}
         <View
           style={[
-            styles.card,
+            styles.surfaceBlock,
             {
               backgroundColor: c.surface,
-              borderColor: c.border,
-              borderRadius: theme.radius.lg,
+              borderRadius: theme.radius.xl,
               ...getCardElevation(theme),
             },
           ]}
@@ -509,7 +559,7 @@ export default function ProfileScreen() {
           </View>
 
           {loadingAds ? (
-            <ActivityIndicator color={c.primary} style={{ marginVertical: 16 }} />
+            <ActivityIndicator color={c.primary} style={{ marginVertical: 18 }} />
           ) : myListings.length === 0 ? (
             <Text style={[styles.emptyAdsText, { color: c.textMuted }]}>
               You haven&apos;t posted any ads yet. Tap &ldquo;+ Post New&rdquo; to list your
@@ -525,7 +575,10 @@ export default function ProfileScreen() {
                     key={item.id}
                     style={[
                       styles.adItem,
-                      { backgroundColor: c.surfaceElevated, borderColor: c.border },
+                      {
+                        backgroundColor: c.surfaceElevated,
+                        borderRadius: theme.radius.lg,
+                      },
                     ]}
                   >
                     <HapticButton
@@ -533,12 +586,15 @@ export default function ProfileScreen() {
                       onPress={() => router.push(`/listing/${item.id}`)}
                     >
                       {item.images?.[0] ? (
-                        <Image source={{ uri: item.images[0] }} style={styles.adThumb} />
+                        <Image
+                          source={{ uri: item.images[0] }}
+                          style={[styles.adThumb, { borderRadius: theme.radius.md }]}
+                        />
                       ) : (
                         <View
                           style={[
                             styles.adThumbPlaceholder,
-                            { backgroundColor: c.surface },
+                            { backgroundColor: c.surface, borderRadius: theme.radius.md },
                           ]}
                         >
                           <Ionicons name="image-outline" size={20} color={c.textMuted} />
@@ -553,9 +609,12 @@ export default function ProfileScreen() {
                           <View
                             style={[
                               styles.statusPill,
-                              isActive
-                                ? { backgroundColor: c.primaryMuted }
-                                : { backgroundColor: 'rgba(239, 68, 68, 0.16)' },
+                              {
+                                backgroundColor: isActive
+                                  ? c.primaryMuted
+                                  : 'rgba(239, 68, 68, 0.16)',
+                                borderRadius: theme.radius.sm,
+                              },
                             ]}
                           >
                             <Text
@@ -584,7 +643,7 @@ export default function ProfileScreen() {
                       <HapticButton
                         style={[
                           styles.actionBtn,
-                          { backgroundColor: c.surface, borderColor: c.border },
+                          { backgroundColor: c.surface, borderRadius: theme.radius.sm },
                         ]}
                         onPress={() => handleToggleAdStatus(item)}
                         disabled={isBusy}
@@ -606,8 +665,7 @@ export default function ProfileScreen() {
                       <HapticButton
                         style={[
                           styles.actionBtn,
-                          styles.deleteBtn,
-                          { backgroundColor: c.surface },
+                          { backgroundColor: c.surface, borderRadius: theme.radius.sm },
                         ]}
                         onPress={() => handleDeleteAd(item)}
                         disabled={isBusy}
@@ -628,11 +686,10 @@ export default function ProfileScreen() {
         {/* SELLER DETAILS FORM */}
         <View
           style={[
-            styles.card,
+            styles.surfaceBlock,
             {
               backgroundColor: c.surface,
-              borderColor: c.border,
-              borderRadius: theme.radius.lg,
+              borderRadius: theme.radius.xl,
               ...getCardElevation(theme),
             },
           ]}
@@ -641,68 +698,43 @@ export default function ProfileScreen() {
             Seller & Contact Details
           </Text>
 
-          <View style={styles.fieldGroup}>
-            <Text style={[styles.label, { color: c.textMuted }]}>Display Name</Text>
-            <TextInput
-              style={[
-                styles.input,
-                {
-                  backgroundColor: c.surfaceElevated,
-                  borderColor: c.border,
-                  color: c.text,
-                },
-              ]}
-              value={editName}
-              onChangeText={setEditName}
-              placeholder="Your name"
-              placeholderTextColor={c.textMuted}
-            />
-          </View>
+          <NativeInput
+            label="Display Name"
+            icon="person-outline"
+            value={editName}
+            onChangeText={setEditName}
+            placeholder="Your name"
+            containerStyle={styles.fieldSpacing}
+          />
 
-          <View style={styles.fieldGroup}>
-            <Text style={[styles.label, { color: c.textMuted }]}>
-              Phone Number (optional)
-            </Text>
-            <TextInput
-              style={[
-                styles.input,
-                {
-                  backgroundColor: c.surfaceElevated,
-                  borderColor: c.border,
-                  color: c.text,
-                },
-              ]}
-              value={editPhone}
-              onChangeText={setEditPhone}
-              placeholder="+91 98765 43210"
-              placeholderTextColor={c.textMuted}
-              keyboardType="phone-pad"
-            />
-          </View>
+          <NativeInput
+            label="Phone Number (optional)"
+            icon="call-outline"
+            value={editPhone}
+            onChangeText={setEditPhone}
+            placeholder="+91 98765 43210"
+            keyboardType="phone-pad"
+            containerStyle={styles.fieldSpacing}
+          />
 
-          <View style={styles.fieldGroup}>
-            <Text style={[styles.label, { color: c.textMuted }]}>Default City</Text>
-            <TextInput
-              style={[
-                styles.input,
-                {
-                  backgroundColor: c.surfaceElevated,
-                  borderColor: c.border,
-                  color: c.text,
-                },
-              ]}
-              value={editCity}
-              onChangeText={setEditCity}
-              placeholder="Chennai"
-              placeholderTextColor={c.textMuted}
-            />
-          </View>
+          <NativeInput
+            label="Default City"
+            icon="location-outline"
+            value={editCity}
+            onChangeText={setEditCity}
+            placeholder="Chennai"
+            containerStyle={styles.fieldSpacing}
+          />
 
           <HapticButton
             hapticStyle="medium"
             style={[
               styles.primaryBtn,
-              { backgroundColor: c.primary },
+              {
+                backgroundColor: c.primary,
+                borderRadius: theme.radius.md,
+                ...getCardElevation(theme),
+              },
               savingProfile && { opacity: 0.7 },
             ]}
             onPress={handleSaveProfile}
@@ -718,11 +750,16 @@ export default function ProfileScreen() {
           </HapticButton>
         </View>
 
+        {/* SIGN OUT */}
         <HapticButton
           hapticStyle="medium"
           style={[
             styles.signOutBtn,
-            { backgroundColor: c.surface, borderColor: c.border },
+            {
+              backgroundColor: c.surface,
+              borderRadius: theme.radius.lg,
+              ...getCardElevation(theme),
+            },
           ]}
           onPress={handleSignOut}
         >
@@ -730,6 +767,8 @@ export default function ProfileScreen() {
           <Text style={[styles.signOutText, { color: c.danger }]}>Sign Out</Text>
         </HapticButton>
       </ScrollView>
+
+      {renderThemeBottomSheet()}
     </View>
   );
 }
@@ -737,54 +776,98 @@ export default function ProfileScreen() {
 const styles = StyleSheet.create({
   centered: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   page: { flex: 1 },
-  authContainer: { flexGrow: 1, justifyContent: 'center', padding: 24 },
-  profileContainer: { padding: 16, gap: 16 },
-  brandTitle: { fontSize: 24, fontWeight: '800', textAlign: 'center' },
-  brandSub: { fontSize: 14, marginTop: 6, marginBottom: 24, textAlign: 'center' },
-  card: {
-    borderWidth: 1,
-    padding: 16,
+  authContainer: { flexGrow: 1, justifyContent: 'center', padding: 16, gap: 16 },
+  authHero: { alignItems: 'center', paddingVertical: 12 },
+  profileContainer: { paddingHorizontal: 16, paddingTop: 12, gap: 16 },
+  topStrip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  brandRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  screenTitle: { fontSize: 22, fontWeight: '900', letterSpacing: -0.4 },
+  themePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+  },
+  themePillText: { fontSize: 12, fontWeight: '700' },
+  brandTitle: { fontSize: 24, fontWeight: '900', marginTop: 12, letterSpacing: -0.4 },
+  brandSub: { fontSize: 14, marginTop: 4, textAlign: 'center' },
+  heroCard: {
+    padding: 18,
+    gap: 16,
+  },
+  surfaceBlock: {
+    padding: 18,
   },
   rowBetween: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: 8,
+    marginBottom: 14,
   },
   avatarRow: { flexDirection: 'row', alignItems: 'center', gap: 14 },
-  avatarCircle: {
-    width: 54,
-    height: 54,
-    borderRadius: 27,
+  avatarRing: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    borderWidth: 2,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  avatarInitial: { fontSize: 22, fontWeight: '800' },
-  userName: { fontSize: 18, fontWeight: '700' },
+  avatarInitial: { fontSize: 24, fontWeight: '900' },
+  userName: { fontSize: 19, fontWeight: '800', letterSpacing: -0.2 },
   userEmail: { fontSize: 13, marginTop: 2 },
-  sectionTitle: { fontSize: 16, fontWeight: '700', marginBottom: 12 },
-  newAdLink: { fontSize: 13, fontWeight: '700', marginBottom: 12 },
+  cityTagRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 5 },
+  cityTagText: { fontSize: 12, fontWeight: '600' },
+  quickGrid: { flexDirection: 'row', gap: 10 },
+  quickTile: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    gap: 5,
+  },
+  quickTileLabel: { fontSize: 12, fontWeight: '700' },
+  quickRowCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    padding: 14,
+  },
+  quickIconBox: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  quickTitle: { fontSize: 14, fontWeight: '700' },
+  quickSub: { fontSize: 12, marginTop: 1 },
+  sectionTitle: { fontSize: 16, fontWeight: '800', letterSpacing: -0.2 },
+  newAdLink: { fontSize: 13, fontWeight: '800' },
   emptyAdsText: { fontSize: 13, lineHeight: 19 },
   adItem: {
-    borderRadius: 12,
-    borderWidth: 1,
-    padding: 10,
+    padding: 12,
     gap: 10,
   },
-  adTopRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  adThumb: { width: 58, height: 58, borderRadius: 10 },
+  adTopRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  adThumb: { width: 58, height: 58 },
   adThumbPlaceholder: {
     width: 58,
     height: 58,
-    borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  adPrice: { fontSize: 14, fontWeight: '800' },
-  adTitle: { fontSize: 14, fontWeight: '600', marginTop: 2 },
-  adMeta: { fontSize: 11, marginTop: 2 },
-  statusPill: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6 },
-  statusText: { fontSize: 10, fontWeight: '800' },
+  adPrice: { fontSize: 14, fontWeight: '900' },
+  adTitle: { fontSize: 14, fontWeight: '700', marginTop: 2 },
+  adMeta: { fontSize: 11, marginTop: 2, fontWeight: '500' },
+  statusPill: { paddingHorizontal: 8, paddingVertical: 3 },
+  statusText: { fontSize: 10, fontWeight: '900', letterSpacing: 0.3 },
   adActions: { flexDirection: 'row', gap: 8 },
   actionBtn: {
     flex: 1,
@@ -792,38 +875,44 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 5,
-    paddingVertical: 8,
-    borderRadius: 8,
-    borderWidth: 1,
+    paddingVertical: 9,
   },
-  deleteBtn: { borderColor: 'rgba(239, 68, 68, 0.35)' },
   actionBtnText: { fontSize: 12, fontWeight: '700' },
-  fieldGroup: { marginBottom: 14 },
-  label: { fontSize: 13, fontWeight: '600', marginBottom: 6 },
-  input: {
-    borderWidth: 1,
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    fontSize: 15,
-  },
+  fieldSpacing: { marginBottom: 14 },
   primaryBtn: {
-    borderRadius: 12,
     paddingVertical: 14,
     alignItems: 'center',
-    marginTop: 6,
+    marginTop: 4,
   },
   primaryBtnText: { fontSize: 15, fontWeight: '800' },
-  switchBtn: { marginTop: 18, alignItems: 'center' },
-  switchText: { fontSize: 14, fontWeight: '600' },
+  switchBtn: { marginTop: 16, alignItems: 'center' },
+  switchText: { fontSize: 13, fontWeight: '700' },
   signOutBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    borderWidth: 1,
-    borderRadius: 12,
-    paddingVertical: 14,
+    paddingVertical: 15,
   },
-  signOutText: { fontSize: 15, fontWeight: '700' },
+  signOutText: { fontSize: 15, fontWeight: '800' },
+  themeOptionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 14,
+  },
+  themeOptionLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    flex: 1,
+  },
+  themeSwatch: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    borderWidth: 2,
+  },
+  themeOptionTitle: { fontSize: 14, fontWeight: '700' },
+  themeOptionSub: { fontSize: 11, marginTop: 1 },
 });
