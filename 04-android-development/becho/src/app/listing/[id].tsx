@@ -1,21 +1,23 @@
 import { Ionicons } from '@expo/vector-icons';
+import * as Haptics from 'expo-haptics';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import {
-    ActivityIndicator,
-    Alert,
-    Dimensions,
-    Image,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View,
+  ActivityIndicator,
+  Alert,
+  Dimensions,
+  Image,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { HapticButton } from '../../components/NativeUI';
 import { useAuth } from '../../lib/auth-context';
 import { Listing, formatINR, formatListingPrice, formatTimeAgo } from '../../lib/listings';
 import { supabase } from '../../lib/supabase';
-import { BECHO_COLORS } from '../../lib/theme';
+import { getCardElevation, useBechoTheme } from '../../lib/theme';
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
 
@@ -23,6 +25,9 @@ export default function ListingDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const { user } = useAuth();
+  const { theme } = useBechoTheme();
+  const insets = useSafeAreaInsets();
+  const c = theme.colors;
 
   const [listing, setListing] = useState<Listing | null>(null);
   const [loading, setLoading] = useState(true);
@@ -77,12 +82,12 @@ export default function ListingDetailScreen() {
     return () => {
       mounted = false;
     };
-  }, [id]);
+  }, [id, router]);
 
   if (loading || !listing) {
     return (
-      <View style={styles.centered}>
-        <ActivityIndicator size="large" color={BECHO_COLORS.primary} />
+      <View style={[styles.centered, { backgroundColor: c.bg }]}>
+        <ActivityIndicator size="large" color={c.primary} />
       </View>
     );
   }
@@ -91,8 +96,10 @@ export default function ListingDetailScreen() {
   const isRent = listing.listing_type === 'RENT';
   const locationLabel = [listing.locality, listing.city].filter(Boolean).join(', ');
   const sellerName = listing.profiles?.full_name || 'Becho Seller';
+  const images = listing.images ?? [];
 
   const handleChatPress = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
     if (!user) {
       router.push('/(tabs)/profile');
       return;
@@ -108,22 +115,50 @@ export default function ListingDetailScreen() {
   };
 
   return (
-    <View style={styles.screen}>
-      {/* TOP BAR */}
-      <View style={styles.topBar}>
-        <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
-          <Ionicons name="arrow-back" size={22} color={BECHO_COLORS.text} />
-        </TouchableOpacity>
-        <Text style={styles.topBarTitle} numberOfLines={1}>
-          Ad Details
-        </Text>
-        <View style={{ width: 38 }} />
+    <View style={[styles.screen, { backgroundColor: c.bg }]}>
+      {/* FLOATING TOP BACK BUTTON */}
+      <View style={[styles.floatingTopBar, { top: Math.max(insets.top, 12) }]}>
+        <HapticButton
+          hapticStyle="light"
+          style={[
+            styles.floatingIconBtn,
+            {
+              backgroundColor: c.surface,
+              ...getCardElevation(theme),
+            },
+          ]}
+          onPress={() => router.back()}
+        >
+          <Ionicons name="arrow-back" size={20} color={c.text} />
+        </HapticButton>
+
+        <View
+          style={[
+            styles.floatingPill,
+            {
+              backgroundColor: c.surface,
+              ...getCardElevation(theme),
+            },
+          ]}
+        >
+          <Text style={[styles.floatingPillText, { color: c.text }]} numberOfLines={1}>
+            {listing.category}
+          </Text>
+        </View>
+
+        <View style={{ width: 40 }} />
       </View>
 
-      <ScrollView contentContainerStyle={styles.scrollContent}>
-        {/* PHOTO CAROUSEL */}
-        <View style={styles.carouselWrap}>
-          {listing.images && listing.images.length > 0 ? (
+      <ScrollView
+        contentContainerStyle={[
+          styles.scrollContent,
+          { paddingBottom: 112 + insets.bottom },
+        ]}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* FULL-BLEED PHOTO GALLERY */}
+        <View style={[styles.carouselWrap, { backgroundColor: c.surfaceElevated }]}>
+          {images.length > 0 ? (
             <>
               <ScrollView
                 horizontal
@@ -131,101 +166,222 @@ export default function ListingDetailScreen() {
                 showsHorizontalScrollIndicator={false}
                 onMomentumScrollEnd={(e) => {
                   const idx = Math.round(e.nativeEvent.contentOffset.x / SCREEN_WIDTH);
+                  Haptics.selectionAsync().catch(() => {});
                   setActivePhotoIdx(idx);
                 }}
               >
-                {listing.images.map((uri, i) => (
+                {images.map((uri, i) => (
                   <Image
                     key={uri + i}
                     source={{ uri }}
-                    style={{ width: SCREEN_WIDTH, height: 280 }}
+                    style={{ width: SCREEN_WIDTH, height: 310 }}
                   />
                 ))}
               </ScrollView>
-              <View style={styles.photoCounter}>
+
+              <View style={[styles.photoCounter, { backgroundColor: c.overlay }]}>
                 <Text style={styles.photoCounterText}>
-                  {activePhotoIdx + 1} / {listing.images.length}
+                  {activePhotoIdx + 1} / {images.length}
                 </Text>
               </View>
+
+              {images.length > 1 && (
+                <View style={styles.dotsRow}>
+                  {images.map((_, idx) => (
+                    <View
+                      key={idx}
+                      style={[
+                        styles.dotIndicator,
+                        {
+                          backgroundColor:
+                            idx === activePhotoIdx ? c.primary : 'rgba(255,255,255,0.45)',
+                          width: idx === activePhotoIdx ? 18 : 6,
+                        },
+                      ]}
+                    />
+                  ))}
+                </View>
+              )}
             </>
           ) : (
             <View style={styles.noPhotoBox}>
-              <Ionicons name="image-outline" size={48} color={BECHO_COLORS.textMuted} />
-              <Text style={styles.noPhotoText}>No photos provided</Text>
+              <Ionicons name="image-outline" size={48} color={c.textMuted} />
+              <Text style={[styles.noPhotoText, { color: c.textMuted }]}>
+                No photos provided
+              </Text>
             </View>
           )}
         </View>
 
         {/* MAIN DETAILS */}
         <View style={styles.body}>
-          <View style={styles.tagRow}>
-            <View
-              style={[
-                styles.typeBadge,
-                { backgroundColor: isRent ? BECHO_COLORS.rentBadge : BECHO_COLORS.primary },
-              ]}
-            >
-              <Text style={styles.typeBadgeText}>{isRent ? 'FOR RENT' : 'FOR SALE'}</Text>
-            </View>
-            <View style={styles.catBadge}>
-              <Text style={styles.catBadgeText}>{listing.category}</Text>
-            </View>
-          </View>
+          {/* PRICE & TYPE SURFACE BLOCK */}
+          <View
+            style={[
+              styles.surfaceCard,
+              {
+                backgroundColor: c.surface,
+                borderRadius: theme.radius.xl,
+                ...getCardElevation(theme),
+              },
+            ]}
+          >
+            <View style={styles.tagRow}>
+              <View
+                style={[
+                  styles.typeBadge,
+                  {
+                    backgroundColor: isRent ? c.rentBadge : c.sellBadge,
+                    borderRadius: theme.radius.sm,
+                  },
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.typeBadgeText,
+                    { color: isRent ? c.rentText : c.sellText },
+                  ]}
+                >
+                  {isRent ? 'FOR RENT' : 'FOR SALE'}
+                </Text>
+              </View>
 
-          <Text style={styles.price}>{formatListingPrice(listing)}</Text>
+              <View
+                style={[
+                  styles.catBadge,
+                  {
+                    backgroundColor: c.surfaceElevated,
+                    borderRadius: theme.radius.sm,
+                  },
+                ]}
+              >
+                <Text style={[styles.catBadgeText, { color: c.textSecondary }]}>
+                  {listing.category}
+                </Text>
+              </View>
+            </View>
 
-          {isRent && (listing.security_deposit ?? 0) > 0 && (
-            <Text style={styles.depositText}>
-              Security Deposit: {formatINR(listing.security_deposit!)}
+            <Text style={[styles.price, { color: c.primary }]}>
+              {formatListingPrice(listing)}
             </Text>
-          )}
 
-          <Text style={styles.title}>{listing.title}</Text>
+            {isRent && (listing.security_deposit ?? 0) > 0 && (
+              <Text style={[styles.depositText, { color: c.textMuted }]}>
+                Refundable Deposit: {formatINR(listing.security_deposit!)}
+              </Text>
+            )}
 
-          <View style={styles.metaRow}>
-            <Ionicons name="location-outline" size={16} color={BECHO_COLORS.primary} />
-            <Text style={styles.metaText}>{locationLabel || 'Chennai'}</Text>
-            <Text style={styles.dot}>•</Text>
-            <Text style={styles.metaText}>{formatTimeAgo(listing.created_at)}</Text>
+            <Text style={[styles.title, { color: c.text }]}>{listing.title}</Text>
+
+            <View style={styles.metaRow}>
+              <Ionicons name="location" size={15} color={c.primary} />
+              <Text style={[styles.metaText, { color: c.textSecondary }]}>
+                {locationLabel || 'Chennai'}
+              </Text>
+              <Text style={[styles.dotSep, { color: c.textMuted }]}>•</Text>
+              <Text style={[styles.metaText, { color: c.textMuted }]}>
+                {formatTimeAgo(listing.created_at)}
+              </Text>
+            </View>
           </View>
 
-          <View style={styles.divider} />
-
-          <Text style={styles.sectionHeading}>Description</Text>
-          <Text style={styles.description}>
-            {listing.description || 'No additional description provided by the seller.'}
-          </Text>
-
-          <View style={styles.divider} />
+          {/* DESCRIPTION CARD */}
+          <View
+            style={[
+              styles.surfaceCard,
+              {
+                backgroundColor: c.surface,
+                borderRadius: theme.radius.xl,
+                ...getCardElevation(theme),
+              },
+            ]}
+          >
+            <Text style={[styles.sectionHeading, { color: c.text }]}>Description</Text>
+            <Text style={[styles.description, { color: c.textSecondary }]}>
+              {listing.description || 'No additional description provided by the seller.'}
+            </Text>
+          </View>
 
           {/* SELLER CARD */}
-          <Text style={styles.sectionHeading}>Seller</Text>
-          <View style={styles.sellerCard}>
-            <View style={styles.sellerAvatar}>
-              <Text style={styles.sellerInitial}>{sellerName[0].toUpperCase()}</Text>
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.sellerName}>{sellerName}</Text>
-              <Text style={styles.sellerSub}>
-                {listing.profiles?.city || listing.city || 'Chennai'}
-              </Text>
+          <View
+            style={[
+              styles.surfaceCard,
+              {
+                backgroundColor: c.surface,
+                borderRadius: theme.radius.xl,
+                ...getCardElevation(theme),
+              },
+            ]}
+          >
+            <Text style={[styles.sectionHeading, { color: c.text }]}>Seller</Text>
+            <View style={styles.sellerRow}>
+              <View
+                style={[
+                  styles.sellerAvatar,
+                  { borderColor: c.primary, backgroundColor: c.primaryMuted },
+                ]}
+              >
+                <Text style={[styles.sellerInitial, { color: c.primary }]}>
+                  {sellerName[0].toUpperCase()}
+                </Text>
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.sellerName, { color: c.text }]}>{sellerName}</Text>
+                <View style={styles.sellerLocRow}>
+                  <Ionicons name="location-outline" size={13} color={c.textMuted} />
+                  <Text style={[styles.sellerSub, { color: c.textMuted }]}>
+                    {listing.profiles?.city || listing.city || 'Chennai'}
+                  </Text>
+                </View>
+              </View>
             </View>
           </View>
         </View>
       </ScrollView>
 
       {/* BOTTOM ACTION BAR */}
-      <View style={styles.bottomBar}>
+      <View
+        style={[
+          styles.bottomBar,
+          {
+            backgroundColor: c.surface,
+            paddingBottom: Math.max(insets.bottom, 14),
+            ...getCardElevation(theme),
+          },
+        ]}
+      >
         {isOwner ? (
-          <View style={styles.ownerBanner}>
-            <Ionicons name="checkmark-circle" size={18} color={BECHO_COLORS.primary} />
-            <Text style={styles.ownerBannerText}>You published this listing</Text>
+          <View
+            style={[
+              styles.ownerBanner,
+              {
+                backgroundColor: c.surfaceElevated,
+                borderRadius: theme.radius.lg,
+              },
+            ]}
+          >
+            <Ionicons name="checkmark-circle" size={19} color={c.primary} />
+            <Text style={[styles.ownerBannerText, { color: c.text }]}>
+              You published this listing
+            </Text>
           </View>
         ) : (
-          <TouchableOpacity style={styles.chatBtn} onPress={handleChatPress}>
-            <Ionicons name="chatbubble-ellipses-outline" size={20} color="#052E16" />
-            <Text style={styles.chatBtnText}>Chat with Seller</Text>
-          </TouchableOpacity>
+          <HapticButton
+            hapticStyle="medium"
+            style={[
+              styles.chatBtn,
+              {
+                backgroundColor: c.primary,
+                borderRadius: theme.radius.lg,
+              },
+            ]}
+            onPress={handleChatPress}
+          >
+            <Ionicons name="chatbubble-ellipses" size={20} color={c.primaryText} />
+            <Text style={[styles.chatBtnText, { color: c.primaryText }]}>
+              Chat with Seller
+            </Text>
+          </HapticButton>
         )}
       </View>
     </View>
@@ -233,115 +389,124 @@ export default function ListingDetailScreen() {
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: BECHO_COLORS.bg },
-  centered: { flex: 1, backgroundColor: BECHO_COLORS.bg, alignItems: 'center', justifyContent: 'center' },
-  topBar: {
+  screen: { flex: 1 },
+  centered: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  floatingTopBar: {
+    position: 'absolute',
+    left: 16,
+    right: 16,
+    zIndex: 10,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 14,
-    paddingTop: 14,
-    paddingBottom: 10,
-    backgroundColor: BECHO_COLORS.surface,
-    borderBottomWidth: 1,
-    borderBottomColor: BECHO_COLORS.border,
   },
-  backBtn: {
-    width: 38,
-    height: 38,
-    borderRadius: 10,
-    backgroundColor: BECHO_COLORS.surfaceElevated,
+  floatingIconBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  topBarTitle: { color: BECHO_COLORS.text, fontSize: 16, fontWeight: '700', maxWidth: '70%' },
-  scrollContent: { paddingBottom: 96 },
-  carouselWrap: { width: SCREEN_WIDTH, height: 280, backgroundColor: BECHO_COLORS.surfaceElevated },
+  floatingPill: {
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: 999,
+    maxWidth: '60%',
+  },
+  floatingPillText: {
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  scrollContent: {},
+  carouselWrap: { width: SCREEN_WIDTH, height: 310 },
   noPhotoBox: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 8 },
-  noPhotoText: { color: BECHO_COLORS.textMuted, fontSize: 13 },
+  noPhotoText: { fontSize: 13, fontWeight: '600' },
   photoCounter: {
     position: 'absolute',
-    bottom: 12,
-    right: 12,
-    backgroundColor: 'rgba(0,0,0,0.65)',
+    bottom: 14,
+    right: 14,
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 999,
   },
-  photoCounterText: { color: '#FFF', fontSize: 12, fontWeight: '700' },
-  body: { padding: 16 },
+  photoCounterText: { color: '#FFF', fontSize: 12, fontWeight: '800' },
+  dotsRow: {
+    position: 'absolute',
+    bottom: 16,
+    left: 0,
+    right: 0,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 5,
+  },
+  dotIndicator: {
+    height: 6,
+    borderRadius: 3,
+  },
+  body: {
+    paddingHorizontal: 16,
+    marginTop: -12,
+    gap: 14,
+  },
+  surfaceCard: {
+    padding: 18,
+  },
   tagRow: { flexDirection: 'row', gap: 8, marginBottom: 10 },
-  typeBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 6 },
-  typeBadgeText: { color: '#052E16', fontSize: 11, fontWeight: '900' },
+  typeBadge: { paddingHorizontal: 10, paddingVertical: 4 },
+  typeBadgeText: { fontSize: 11, fontWeight: '900', letterSpacing: 0.4 },
   catBadge: {
     paddingHorizontal: 10,
     paddingVertical: 4,
-    borderRadius: 6,
-    backgroundColor: BECHO_COLORS.surfaceElevated,
-    borderWidth: 1,
-    borderColor: BECHO_COLORS.border,
   },
-  catBadgeText: { color: BECHO_COLORS.textMuted, fontSize: 11, fontWeight: '700' },
-  price: { color: BECHO_COLORS.primary, fontSize: 26, fontWeight: '900' },
-  depositText: { color: BECHO_COLORS.textMuted, fontSize: 13, marginTop: 4 },
-  title: { color: BECHO_COLORS.text, fontSize: 19, fontWeight: '700', marginTop: 8, lineHeight: 25 },
-  metaRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 10 },
-  metaText: { color: BECHO_COLORS.textMuted, fontSize: 13 },
-  dot: { color: BECHO_COLORS.textMuted },
-  divider: { height: 1, backgroundColor: BECHO_COLORS.border, marginVertical: 18 },
-  sectionHeading: { color: BECHO_COLORS.text, fontSize: 15, fontWeight: '700', marginBottom: 8 },
-  description: { color: BECHO_COLORS.text, fontSize: 14, lineHeight: 22, opacity: 0.9 },
-  sellerCard: {
+  catBadgeText: { fontSize: 11, fontWeight: '700' },
+  price: { fontSize: 28, fontWeight: '900', letterSpacing: -0.5 },
+  depositText: { fontSize: 13, fontWeight: '600', marginTop: 4 },
+  title: { fontSize: 19, fontWeight: '800', marginTop: 8, lineHeight: 26, letterSpacing: -0.2 },
+  metaRow: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 12 },
+  metaText: { fontSize: 13, fontWeight: '600' },
+  dotSep: { fontSize: 13 },
+  sectionHeading: { fontSize: 15, fontWeight: '800', marginBottom: 8, letterSpacing: -0.2 },
+  description: { fontSize: 14, lineHeight: 22, fontWeight: '500' },
+  sellerRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-    backgroundColor: BECHO_COLORS.surface,
-    borderWidth: 1,
-    borderColor: BECHO_COLORS.border,
-    padding: 14,
-    borderRadius: 14,
   },
   sellerAvatar: {
-    width: 46,
-    height: 46,
-    borderRadius: 23,
-    backgroundColor: BECHO_COLORS.primaryMuted,
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    borderWidth: 1.5,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  sellerInitial: { color: BECHO_COLORS.primary, fontSize: 18, fontWeight: '800' },
-  sellerName: { color: BECHO_COLORS.text, fontSize: 15, fontWeight: '700' },
-  sellerSub: { color: BECHO_COLORS.textMuted, fontSize: 12, marginTop: 2 },
+  sellerInitial: { fontSize: 20, fontWeight: '900' },
+  sellerName: { fontSize: 16, fontWeight: '800', letterSpacing: -0.2 },
+  sellerLocRow: { flexDirection: 'row', alignItems: 'center', gap: 3, marginTop: 3 },
+  sellerSub: { fontSize: 12, fontWeight: '600' },
   bottomBar: {
     position: 'absolute',
     bottom: 0,
     left: 0,
     right: 0,
-    padding: 14,
-    backgroundColor: BECHO_COLORS.surface,
-    borderTopWidth: 1,
-    borderTopColor: BECHO_COLORS.border,
+    paddingHorizontal: 16,
+    paddingTop: 12,
   },
   chatBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    backgroundColor: BECHO_COLORS.primary,
-    paddingVertical: 14,
-    borderRadius: 12,
+    paddingVertical: 15,
   },
-  chatBtnText: { color: '#052E16', fontSize: 15, fontWeight: '800' },
+  chatBtnText: { fontSize: 15, fontWeight: '900' },
   ownerBanner: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    paddingVertical: 14,
-    borderRadius: 12,
-    backgroundColor: BECHO_COLORS.surfaceElevated,
-    borderWidth: 1,
-    borderColor: BECHO_COLORS.border,
+    paddingVertical: 15,
   },
-  ownerBannerText: { color: BECHO_COLORS.text, fontSize: 14, fontWeight: '700' },
+  ownerBannerText: { fontSize: 14, fontWeight: '800' },
 });

@@ -1,22 +1,24 @@
 import { Ionicons } from '@expo/vector-icons';
+import * as Haptics from 'expo-haptics';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
-    ActivityIndicator,
-    Alert,
-    FlatList,
-    KeyboardAvoidingView,
-    Platform,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
+  ActivityIndicator,
+  Alert,
+  FlatList,
+  KeyboardAvoidingView,
+  Platform,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { HapticButton } from '../../components/NativeUI';
 import { useAuth } from '../../lib/auth-context';
 import { formatTimeAgo } from '../../lib/listings';
 import { supabase } from '../../lib/supabase';
-import { BECHO_COLORS } from '../../lib/theme';
+import { getCardElevation, useBechoTheme } from '../../lib/theme';
 
 interface ChatMessage {
   id: string;
@@ -36,6 +38,9 @@ export default function ChatThreadScreen() {
   }>();
   const router = useRouter();
   const { user } = useAuth();
+  const { theme } = useBechoTheme();
+  const insets = useSafeAreaInsets();
+  const c = theme.colors;
 
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [draft, setDraft] = useState('');
@@ -45,10 +50,11 @@ export default function ChatThreadScreen() {
     peerId || sellerId || null
   );
   const [listingTitle, setListingTitle] = useState<string>(title || 'Listing Chat');
+  const [peerName, setPeerName] = useState<string>('Becho Member');
 
   const listRef = useRef<FlatList<ChatMessage>>(null);
 
-  // Resolve listing title & counterparty ID if opened from inbox
+  // Resolve listing title & counterparty ID/name if opened from inbox
   useEffect(() => {
     if (!listingId || !user) return;
     let active = true;
@@ -65,11 +71,13 @@ export default function ChatThreadScreen() {
         setListingTitle(listingRow.title);
       }
 
-      if (!resolvedPeerId && listingRow) {
+      let candidatePeerId = resolvedPeerId;
+
+      if (!candidatePeerId && listingRow) {
         if (listingRow.seller_id !== user.id) {
+          candidatePeerId = listingRow.seller_id;
           setResolvedPeerId(listingRow.seller_id);
         } else {
-          // Seller opened thread: find the buyer from existing messages
           const { data: latestMsg } = await supabase
             .from('messages')
             .select('sender_id, receiver_id')
@@ -81,8 +89,20 @@ export default function ChatThreadScreen() {
           if (active && latestMsg) {
             const buyer =
               latestMsg.sender_id === user.id ? latestMsg.receiver_id : latestMsg.sender_id;
+            candidatePeerId = buyer;
             setResolvedPeerId(buyer);
           }
+        }
+      }
+
+      if (active && candidatePeerId) {
+        const { data: profileRow } = await supabase
+          .from('profiles')
+          .select('full_name')
+          .eq('id', candidatePeerId)
+          .maybeSingle();
+        if (active && profileRow?.full_name) {
+          setPeerName(profileRow.full_name);
         }
       }
     })();
@@ -189,6 +209,8 @@ export default function ChatThreadScreen() {
 
       if (error) throw error;
 
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+
       if (data) {
         setMessages((prev) =>
           prev.some((m) => m.id === data.id) ? prev : [...prev, data as ChatMessage]
@@ -196,6 +218,7 @@ export default function ChatThreadScreen() {
       }
     } catch (err: any) {
       setDraft(text);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
       Alert.alert('Message Failed', err.message ?? 'Could not send message');
     } finally {
       setSending(false);
@@ -204,40 +227,95 @@ export default function ChatThreadScreen() {
 
   if (!user) {
     return (
-      <View style={styles.centered}>
-        <Text style={styles.gateText}>Sign in to chat with sellers.</Text>
-        <TouchableOpacity
-          style={styles.signInBtn}
+      <View style={[styles.centered, { backgroundColor: c.bg }]}>
+        <Text style={[styles.gateText, { color: c.text }]}>
+          Sign in to chat with sellers.
+        </Text>
+        <HapticButton
+          hapticStyle="medium"
+          style={[
+            styles.signInBtn,
+            { backgroundColor: c.primary, borderRadius: theme.radius.md },
+          ]}
           onPress={() => router.replace('/(tabs)/profile')}
         >
-          <Text style={styles.signInBtnText}>Go to Sign In</Text>
-        </TouchableOpacity>
+          <Text style={[styles.signInBtnText, { color: c.primaryText }]}>
+            Go to Sign In
+          </Text>
+        </HapticButton>
       </View>
     );
   }
 
   return (
     <KeyboardAvoidingView
-      style={styles.screen}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      style={[styles.screen, { backgroundColor: c.bg }]}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       keyboardVerticalOffset={Platform.OS === 'ios' ? 64 : 0}
     >
-      {/* HEADER */}
-      <View style={styles.header}>
-        <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
-          <Ionicons name="arrow-back" size={22} color={BECHO_COLORS.text} />
-        </TouchableOpacity>
-        <View style={{ flex: 1 }}>
-          <Text style={styles.headerTitle} numberOfLines={1}>
-            {listingTitle}
+      {/* NATIVE CHAT HEADER */}
+      <View
+        style={[
+          styles.header,
+          {
+            backgroundColor: c.surface,
+            paddingTop: Math.max(insets.top, 12),
+            ...getCardElevation(theme),
+          },
+        ]}
+      >
+        <HapticButton
+          hapticStyle="light"
+          style={[
+            styles.iconCircleBtn,
+            { backgroundColor: c.surfaceElevated },
+          ]}
+          onPress={() => router.back()}
+        >
+          <Ionicons name="arrow-back" size={20} color={c.text} />
+        </HapticButton>
+
+        <View
+          style={[
+            styles.peerAvatar,
+            { borderColor: c.primary, backgroundColor: c.primaryMuted },
+          ]}
+        >
+          <Text style={[styles.peerInitial, { color: c.primary }]}>
+            {peerName[0].toUpperCase()}
           </Text>
-          <Text style={styles.headerSub}>Live Becho Chat</Text>
         </View>
+
+        <View style={{ flex: 1 }}>
+          <Text style={[styles.headerTitle, { color: c.text }]} numberOfLines={1}>
+            {peerName}
+          </Text>
+          <View style={styles.subRow}>
+            <View style={[styles.liveDot, { backgroundColor: c.primary }]} />
+            <Text
+              style={[styles.headerSub, { color: c.textMuted }]}
+              numberOfLines={1}
+            >
+              {listingTitle}
+            </Text>
+          </View>
+        </View>
+
+        <HapticButton
+          hapticStyle="light"
+          style={[
+            styles.iconCircleBtn,
+            { backgroundColor: c.surfaceElevated },
+          ]}
+          onPress={() => router.push(`/listing/${listingId}`)}
+        >
+          <Ionicons name="pricetag-outline" size={18} color={c.primary} />
+        </HapticButton>
       </View>
 
       {loading ? (
         <View style={styles.centered}>
-          <ActivityIndicator size="large" color={BECHO_COLORS.primary} />
+          <ActivityIndicator size="large" color={c.primary} />
         </View>
       ) : (
         <FlatList
@@ -245,16 +323,52 @@ export default function ChatThreadScreen() {
           data={messages}
           keyExtractor={(item) => item.id}
           contentContainerStyle={styles.messageList}
+          showsVerticalScrollIndicator={false}
           onContentSizeChange={() => listRef.current?.scrollToEnd({ animated: true })}
           renderItem={({ item }) => {
             const mine = item.sender_id === user.id;
             return (
               <View style={[styles.bubbleRow, mine ? styles.rowMine : styles.rowTheirs]}>
-                <View style={[styles.bubble, mine ? styles.bubbleMine : styles.bubbleTheirs]}>
-                  <Text style={[styles.bubbleText, mine && styles.bubbleTextMine]}>
+                <View
+                  style={[
+                    styles.bubble,
+                    mine
+                      ? [
+                          styles.bubbleMine,
+                          {
+                            backgroundColor: c.primary,
+                            borderRadius: theme.radius.lg,
+                            ...getCardElevation(theme),
+                          },
+                        ]
+                      : [
+                          styles.bubbleTheirs,
+                          {
+                            backgroundColor: c.surface,
+                            borderRadius: theme.radius.lg,
+                            ...getCardElevation(theme),
+                          },
+                        ],
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.bubbleText,
+                      { color: mine ? c.primaryText : c.text },
+                      mine && { fontWeight: '600' },
+                    ]}
+                  >
                     {item.content}
                   </Text>
-                  <Text style={[styles.timeText, mine && styles.timeTextMine]}>
+                  <Text
+                    style={[
+                      styles.timeText,
+                      {
+                        color: mine ? c.primaryText : c.textMuted,
+                        opacity: mine ? 0.78 : 1,
+                      },
+                    ]}
+                  >
                     {formatTimeAgo(item.created_at)}
                   </Text>
                 </View>
@@ -263,13 +377,22 @@ export default function ChatThreadScreen() {
           }}
           ListEmptyComponent={
             <View style={styles.emptyChat}>
-              <Ionicons
-                name="chatbubbles-outline"
-                size={42}
-                color={BECHO_COLORS.textMuted}
-              />
-              <Text style={styles.emptyTitle}>Start the conversation</Text>
-              <Text style={styles.emptySub}>
+              <View
+                style={[
+                  styles.emptyIconWrap,
+                  {
+                    backgroundColor: c.surface,
+                    borderRadius: theme.radius.xl,
+                    ...getCardElevation(theme),
+                  },
+                ]}
+              >
+                <Ionicons name="chatbubbles-outline" size={34} color={c.primary} />
+              </View>
+              <Text style={[styles.emptyTitle, { color: c.text }]}>
+                Start the conversation
+              </Text>
+              <Text style={[styles.emptySub, { color: c.textMuted }]}>
                 Ask about item condition, availability, or pickup spot.
               </Text>
             </View>
@@ -277,72 +400,96 @@ export default function ChatThreadScreen() {
         />
       )}
 
-      {/* INPUT COMPOSER */}
-      <View style={styles.composer}>
+      {/* NATIVE INPUT COMPOSER */}
+      <View
+        style={[
+          styles.composer,
+          {
+            backgroundColor: c.surface,
+            paddingBottom: Math.max(insets.bottom, 10),
+            ...getCardElevation(theme),
+          },
+        ]}
+      >
         <TextInput
-          style={styles.composerInput}
-          placeholder="Write a message..."
-          placeholderTextColor={BECHO_COLORS.textMuted}
+          style={[
+            styles.composerInput,
+            {
+              backgroundColor: c.surfaceElevated,
+              borderRadius: theme.radius.xl,
+              color: c.text,
+            },
+          ]}
+          placeholder="Message..."
+          placeholderTextColor={c.textMuted}
           value={draft}
           onChangeText={setDraft}
           multiline
           maxLength={500}
         />
-        <TouchableOpacity
-          style={[styles.sendBtn, (!draft.trim() || sending) && { opacity: 0.5 }]}
+        <HapticButton
+          hapticStyle="medium"
+          style={[
+            styles.sendBtn,
+            { backgroundColor: c.primary },
+            (!draft.trim() || sending) && { opacity: 0.45 },
+          ]}
           onPress={handleSend}
           disabled={!draft.trim() || sending}
         >
           {sending ? (
-            <ActivityIndicator size="small" color="#052E16" />
+            <ActivityIndicator size="small" color={c.primaryText} />
           ) : (
-            <Ionicons name="send" size={18} color="#052E16" />
+            <Ionicons name="send" size={18} color={c.primaryText} />
           )}
-        </TouchableOpacity>
+        </HapticButton>
       </View>
     </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: BECHO_COLORS.bg },
+  screen: { flex: 1 },
   centered: {
     flex: 1,
-    backgroundColor: BECHO_COLORS.bg,
     alignItems: 'center',
     justifyContent: 'center',
     padding: 24,
   },
-  gateText: { color: BECHO_COLORS.text, fontSize: 15, marginBottom: 14 },
+  gateText: { fontSize: 15, marginBottom: 14, fontWeight: '600' },
   signInBtn: {
-    backgroundColor: BECHO_COLORS.primary,
     paddingHorizontal: 22,
     paddingVertical: 12,
-    borderRadius: 10,
   },
-  signInBtnText: { color: '#052E16', fontWeight: '800' },
+  signInBtnText: { fontWeight: '800' },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: 10,
     paddingHorizontal: 14,
-    paddingTop: 14,
     paddingBottom: 12,
-    backgroundColor: BECHO_COLORS.surface,
-    borderBottomWidth: 1,
-    borderBottomColor: BECHO_COLORS.border,
   },
-  backBtn: {
+  iconCircleBtn: {
     width: 38,
     height: 38,
-    borderRadius: 10,
-    backgroundColor: BECHO_COLORS.surfaceElevated,
+    borderRadius: 19,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  headerTitle: { color: BECHO_COLORS.text, fontSize: 16, fontWeight: '700' },
-  headerSub: { color: BECHO_COLORS.primary, fontSize: 11, fontWeight: '600', marginTop: 1 },
-  messageList: { padding: 14, paddingBottom: 24, gap: 10 },
+  peerAvatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    borderWidth: 1.5,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  peerInitial: { fontSize: 16, fontWeight: '900' },
+  headerTitle: { fontSize: 15, fontWeight: '800', letterSpacing: -0.2 },
+  subRow: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 2 },
+  liveDot: { width: 6, height: 6, borderRadius: 3 },
+  headerSub: { fontSize: 11, fontWeight: '600', flex: 1 },
+  messageList: { padding: 14, paddingBottom: 20, gap: 10 },
   bubbleRow: { flexDirection: 'row' },
   rowMine: { justifyContent: 'flex-end' },
   rowTheirs: { justifyContent: 'flex-start' },
@@ -350,57 +497,49 @@ const styles = StyleSheet.create({
     maxWidth: '80%',
     paddingHorizontal: 14,
     paddingVertical: 10,
-    borderRadius: 16,
   },
   bubbleMine: {
-    backgroundColor: BECHO_COLORS.primary,
     borderBottomRightRadius: 4,
   },
   bubbleTheirs: {
-    backgroundColor: BECHO_COLORS.surface,
-    borderWidth: 1,
-    borderColor: BECHO_COLORS.border,
     borderBottomLeftRadius: 4,
   },
-  bubbleText: { color: BECHO_COLORS.text, fontSize: 14, lineHeight: 20 },
-  bubbleTextMine: { color: '#052E16', fontWeight: '600' },
-  timeText: { color: BECHO_COLORS.textMuted, fontSize: 10, marginTop: 4, alignSelf: 'flex-end' },
-  timeTextMine: { color: '#064E3B' },
+  bubbleText: { fontSize: 14, lineHeight: 20 },
+  timeText: { fontSize: 10, marginTop: 4, alignSelf: 'flex-end', fontWeight: '600' },
   emptyChat: { alignItems: 'center', paddingTop: 72, paddingHorizontal: 24 },
-  emptyTitle: { color: BECHO_COLORS.text, fontSize: 16, fontWeight: '700', marginTop: 10 },
+  emptyIconWrap: {
+    width: 68,
+    height: 68,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 4,
+  },
+  emptyTitle: { fontSize: 16, fontWeight: '800', marginTop: 10 },
   emptySub: {
-    color: BECHO_COLORS.textMuted,
     fontSize: 13,
     textAlign: 'center',
     marginTop: 4,
+    lineHeight: 19,
   },
   composer: {
     flexDirection: 'row',
     alignItems: 'flex-end',
     gap: 10,
     paddingHorizontal: 14,
-    paddingVertical: 10,
-    backgroundColor: BECHO_COLORS.surface,
-    borderTopWidth: 1,
-    borderTopColor: BECHO_COLORS.border,
+    paddingTop: 10,
   },
   composerInput: {
     flex: 1,
     maxHeight: 100,
-    backgroundColor: BECHO_COLORS.surfaceElevated,
-    borderWidth: 1,
-    borderColor: BECHO_COLORS.border,
-    borderRadius: 14,
-    paddingHorizontal: 14,
+    paddingHorizontal: 16,
     paddingVertical: 10,
-    color: BECHO_COLORS.text,
     fontSize: 14,
+    fontWeight: '500',
   },
   sendBtn: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
-    backgroundColor: BECHO_COLORS.primary,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     alignItems: 'center',
     justifyContent: 'center',
   },

@@ -1,5 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { decode } from 'base64-arraybuffer';
+import * as Haptics from 'expo-haptics';
 import * as ImagePicker from 'expo-image-picker';
 import * as Location from 'expo-location';
 import { useRouter } from 'expo-router';
@@ -13,14 +14,18 @@ import {
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
-  TouchableOpacity,
   View,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import {
+  BechoLogoMark,
+  HapticButton,
+  NativeInput,
+} from '../../components/NativeUI';
 import { useAuth } from '../../lib/auth-context';
 import { BECHO_CATEGORIES, RENT_PERIODS } from '../../lib/constants';
 import { supabase } from '../../lib/supabase';
-import { BECHO_COLORS } from '../../lib/theme';
+import { getCardElevation, useBechoTheme } from '../../lib/theme';
 
 interface SelectedPhoto {
   uri: string;
@@ -30,7 +35,10 @@ interface SelectedPhoto {
 
 export default function PostAdScreen() {
   const { user, profile } = useAuth();
+  const { theme } = useBechoTheme();
+  const insets = useSafeAreaInsets();
   const router = useRouter();
+  const c = theme.colors;
 
   const [listingType, setListingType] = useState<'SELL' | 'RENT'>('SELL');
   const [category, setCategory] = useState<string>(BECHO_CATEGORIES[0]);
@@ -83,11 +91,13 @@ export default function PostAdScreen() {
           mimeType: asset.mimeType || 'image/jpeg',
         }));
 
+      Haptics.selectionAsync().catch(() => {});
       setPhotos((prev) => [...prev, ...picked].slice(0, 5));
     }
   };
 
   const removePhoto = (index: number) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
     setPhotos((prev) => prev.filter((_, idx) => idx !== index));
   };
 
@@ -123,6 +133,7 @@ export default function PostAdScreen() {
           setLocality(area);
         }
       }
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
     } catch (err: any) {
       Alert.alert('Location Error', err.message ?? 'Could not detect current location');
     } finally {
@@ -197,17 +208,18 @@ export default function PostAdScreen() {
 
       if (error) throw error;
 
-      // Reset form
       setTitle('');
       setDescription('');
       setPrice('');
       setSecurityDeposit('');
       setPhotos([]);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
 
       Alert.alert('Ad Published!', 'Your listing is now live on Becho.', [
         { text: 'View Feed', onPress: () => router.replace('/(tabs)') },
       ]);
     } catch (err: any) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
       Alert.alert('Failed to Post Ad', err.message ?? 'Something went wrong');
     } finally {
       setSubmitting(false);
@@ -216,282 +228,492 @@ export default function PostAdScreen() {
 
   if (!user) {
     return (
-      <View style={styles.authGate}>
-        <View style={styles.gateIcon}>
-          <Ionicons name="add-circle-outline" size={40} color={BECHO_COLORS.primary} />
+      <View style={[styles.page, { backgroundColor: c.bg }]}>
+        <View style={styles.topStrip}>
+          <View style={styles.brandRow}>
+            <BechoLogoMark size={36} />
+            <Text style={[styles.screenTitle, { color: c.text }]}>Post Ad</Text>
+          </View>
         </View>
-        <Text style={styles.gateTitle}>Sign in to Post an Ad</Text>
-        <Text style={styles.gateSub}>
-          List items for sale or rent in seconds and chat directly with local buyers.
-        </Text>
-        <TouchableOpacity
-          style={styles.primaryBtn}
-          onPress={() => router.push('/(tabs)/profile')}
-        >
-          <Text style={styles.primaryBtnText}>Go to Sign In</Text>
-        </TouchableOpacity>
+        <View style={styles.authGate}>
+          <View
+            style={[
+              styles.gateIcon,
+              {
+                backgroundColor: c.surface,
+                borderRadius: theme.radius.xl,
+                ...getCardElevation(theme),
+              },
+            ]}
+          >
+            <Ionicons name="add-circle-outline" size={40} color={c.primary} />
+          </View>
+          <Text style={[styles.gateTitle, { color: c.text }]}>Sign in to Post an Ad</Text>
+          <Text style={[styles.gateSub, { color: c.textMuted }]}>
+            List items for sale or rent in seconds and chat directly with local buyers.
+          </Text>
+          <HapticButton
+            hapticStyle="medium"
+            style={[
+              styles.primaryBtn,
+              {
+                backgroundColor: c.primary,
+                borderRadius: theme.radius.md,
+                ...getCardElevation(theme),
+              },
+            ]}
+            onPress={() => router.push('/(tabs)/profile')}
+          >
+            <Text style={[styles.primaryBtnText, { color: c.primaryText }]}>
+              Go to Sign In
+            </Text>
+          </HapticButton>
+        </View>
       </View>
     );
   }
 
   return (
     <KeyboardAvoidingView
-      style={{ flex: 1, backgroundColor: BECHO_COLORS.bg }}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      style={[styles.page, { backgroundColor: c.bg }]}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 64 : 0}
     >
-      <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
-        {/* 1. LISTING TYPE TOGGLE (SELL vs RENT) */}
-        <Text style={styles.sectionLabel}>What would you like to do?</Text>
-        <View style={styles.toggleRow}>
-          <TouchableOpacity
+      <ScrollView
+        contentContainerStyle={[
+          styles.container,
+          { paddingBottom: 104 + insets.bottom },
+        ]}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+      >
+        {/* TOP BRAND HEADER */}
+        <View style={styles.topStrip}>
+          <View style={styles.brandRow}>
+            <BechoLogoMark size={36} />
+            <View>
+              <Text style={[styles.screenTitle, { color: c.text }]}>Post an Ad</Text>
+              <Text style={[styles.screenSub, { color: c.textMuted }]}>
+                {listingType === 'SELL' ? 'Buy & Sell Marketplace' : 'Local Rental Listing'}
+              </Text>
+            </View>
+          </View>
+
+          <View
             style={[
-              styles.toggleChip,
-              listingType === 'SELL' && styles.toggleChipSellActive,
+              styles.modeBadge,
+              {
+                backgroundColor: listingType === 'SELL' ? c.sellBadge : c.rentBadge,
+                borderRadius: theme.radius.full,
+              },
+            ]}
+          >
+            <Text
+              style={[
+                styles.modeBadgeText,
+                { color: listingType === 'SELL' ? c.sellText : c.rentText },
+              ]}
+            >
+              {listingType === 'SELL' ? 'SALE' : 'RENT'}
+            </Text>
+          </View>
+        </View>
+
+        {/* 1. LISTING TYPE SEGMENTED SWITCHER */}
+        <View
+          style={[
+            styles.segmentTrack,
+            {
+              backgroundColor: c.surface,
+              borderRadius: theme.radius.lg,
+              ...getCardElevation(theme),
+            },
+          ]}
+        >
+          <HapticButton
+            hapticStyle="selection"
+            scaleTo={0.98}
+            style={[
+              styles.segmentBtn,
+              {
+                backgroundColor: listingType === 'SELL' ? c.sellBadge : 'transparent',
+                borderRadius: theme.radius.md,
+              },
             ]}
             onPress={() => setListingType('SELL')}
           >
             <Ionicons
               name="pricetag-outline"
-              size={18}
-              color={listingType === 'SELL' ? '#052E16' : BECHO_COLORS.text}
+              size={17}
+              color={listingType === 'SELL' ? c.sellText : c.textMuted}
             />
             <Text
               style={[
-                styles.toggleText,
-                listingType === 'SELL' && styles.toggleTextActive,
+                styles.segmentText,
+                { color: listingType === 'SELL' ? c.sellText : c.textMuted },
               ]}
             >
               Sell Item
             </Text>
-          </TouchableOpacity>
+          </HapticButton>
 
-          <TouchableOpacity
+          <HapticButton
+            hapticStyle="selection"
+            scaleTo={0.98}
             style={[
-              styles.toggleChip,
-              listingType === 'RENT' && styles.toggleChipRentActive,
+              styles.segmentBtn,
+              {
+                backgroundColor: listingType === 'RENT' ? c.rentBadge : 'transparent',
+                borderRadius: theme.radius.md,
+              },
             ]}
             onPress={() => setListingType('RENT')}
           >
             <Ionicons
               name="repeat-outline"
-              size={18}
-              color={listingType === 'RENT' ? '#042F2E' : BECHO_COLORS.text}
+              size={17}
+              color={listingType === 'RENT' ? c.rentText : c.textMuted}
             />
             <Text
               style={[
-                styles.toggleText,
-                listingType === 'RENT' && styles.toggleTextActive,
+                styles.segmentText,
+                { color: listingType === 'RENT' ? c.rentText : c.textMuted },
               ]}
             >
               Rent Out
             </Text>
-          </TouchableOpacity>
+          </HapticButton>
         </View>
 
-        {/* 2. PHOTOS PICKER */}
-        <View style={styles.rowBetween}>
-          <Text style={styles.sectionLabel}>Photos ({photos.length}/5)</Text>
-          <Text style={styles.helperText}>First photo becomes cover</Text>
+        {/* 2. PHOTOS SURFACE BLOCK */}
+        <View
+          style={[
+            styles.surfaceBlock,
+            {
+              backgroundColor: c.surface,
+              borderRadius: theme.radius.xl,
+              ...getCardElevation(theme),
+            },
+          ]}
+        >
+          <View style={styles.rowBetween}>
+            <Text style={[styles.sectionLabel, { color: c.text }]}>
+              Photos ({photos.length}/5)
+            </Text>
+            <Text style={[styles.helperText, { color: c.textMuted }]}>
+              First photo is cover
+            </Text>
+          </View>
+
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.photoRow}
+          >
+            {photos.length < 5 && (
+              <HapticButton
+                hapticStyle="light"
+                style={[
+                  styles.addPhotoBox,
+                  {
+                    borderColor: c.primary,
+                    backgroundColor: c.surfaceElevated,
+                    borderRadius: theme.radius.lg,
+                  },
+                ]}
+                onPress={handlePickPhotos}
+              >
+                <Ionicons name="camera-outline" size={26} color={c.primary} />
+                <Text style={[styles.addPhotoText, { color: c.primary }]}>Add Photo</Text>
+              </HapticButton>
+            )}
+
+            {photos.map((photo, index) => (
+              <View
+                key={photo.uri + index}
+                style={[
+                  styles.photoPreviewWrap,
+                  {
+                    backgroundColor: c.surfaceElevated,
+                    borderRadius: theme.radius.lg,
+                  },
+                ]}
+              >
+                <Image source={{ uri: photo.uri }} style={styles.photoPreview} />
+                {index === 0 && (
+                  <View
+                    style={[
+                      styles.coverTag,
+                      { backgroundColor: c.primary, borderRadius: theme.radius.sm },
+                    ]}
+                  >
+                    <Text style={[styles.coverTagText, { color: c.primaryText }]}>
+                      COVER
+                    </Text>
+                  </View>
+                )}
+                <HapticButton
+                  hapticStyle="light"
+                  style={[styles.removePhotoBtn, { backgroundColor: c.overlay }]}
+                  onPress={() => removePhoto(index)}
+                >
+                  <Ionicons name="close" size={14} color="#FFF" />
+                </HapticButton>
+              </View>
+            ))}
+          </ScrollView>
         </View>
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.photoRow}
+
+        {/* 3. CATEGORY BLOCK */}
+        <View
+          style={[
+            styles.surfaceBlock,
+            {
+              backgroundColor: c.surface,
+              borderRadius: theme.radius.xl,
+              ...getCardElevation(theme),
+            },
+          ]}
         >
-          {photos.length < 5 && (
-            <TouchableOpacity style={styles.addPhotoBox} onPress={handlePickPhotos}>
-              <Ionicons name="camera-outline" size={28} color={BECHO_COLORS.primary} />
-              <Text style={styles.addPhotoText}>Add Photos</Text>
-            </TouchableOpacity>
-          )}
+          <Text style={[styles.sectionLabel, { color: c.text, marginBottom: 10 }]}>
+            Category
+          </Text>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.chipRow}
+          >
+            {BECHO_CATEGORIES.map((cat) => {
+              const active = category === cat;
+              return (
+                <HapticButton
+                  key={cat}
+                  hapticStyle="selection"
+                  style={[
+                    styles.categoryChip,
+                    {
+                      backgroundColor: active ? c.primaryMuted : c.surfaceElevated,
+                      borderRadius: theme.radius.full,
+                    },
+                  ]}
+                  onPress={() => setCategory(cat)}
+                >
+                  <Text
+                    style={[
+                      styles.categoryText,
+                      { color: active ? c.primary : c.textSecondary },
+                    ]}
+                  >
+                    {cat}
+                  </Text>
+                </HapticButton>
+              );
+            })}
+          </ScrollView>
+        </View>
 
-          {photos.map((photo, index) => (
-            <View key={photo.uri + index} style={styles.photoPreviewWrap}>
-              <Image source={{ uri: photo.uri }} style={styles.photoPreview} />
-              <TouchableOpacity
-                style={styles.removePhotoBtn}
-                onPress={() => removePhoto(index)}
-              >
-                <Ionicons name="close" size={14} color="#FFF" />
-              </TouchableOpacity>
-            </View>
-          ))}
-        </ScrollView>
-
-        {/* 3. CATEGORY CHIPS */}
-        <Text style={styles.sectionLabel}>Category</Text>
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.chipRow}
+        {/* 4. DETAILS & PRICING FORM BLOCK */}
+        <View
+          style={[
+            styles.surfaceBlock,
+            {
+              backgroundColor: c.surface,
+              borderRadius: theme.radius.xl,
+              ...getCardElevation(theme),
+            },
+          ]}
         >
-          {BECHO_CATEGORIES.map((cat) => {
-            const active = category === cat;
-            return (
-              <TouchableOpacity
-                key={cat}
-                style={[styles.categoryChip, active && styles.categoryChipActive]}
-                onPress={() => setCategory(cat)}
-              >
-                <Text style={[styles.categoryText, active && styles.categoryTextActive]}>
-                  {cat}
-                </Text>
-              </TouchableOpacity>
-            );
-          })}
-        </ScrollView>
+          <Text style={[styles.sectionLabel, { color: c.text, marginBottom: 14 }]}>
+            Listing Details
+          </Text>
 
-        {/* 4. TITLE & DESCRIPTION */}
-        <View style={styles.fieldGroup}>
-          <Text style={styles.label}>Ad Title *</Text>
-          <TextInput
-            style={styles.input}
+          <NativeInput
+            label="Ad Title *"
+            icon="create-outline"
             placeholder={
               listingType === 'SELL'
                 ? 'e.g. iPhone 15 Pro 256GB - Mint Condition'
-                : 'e.g. Sony A7 III Mirrorless Camera Kit for Rent'
+                : 'e.g. Sony A7 III Mirrorless Camera Kit'
             }
-            placeholderTextColor={BECHO_COLORS.textMuted}
             value={title}
             onChangeText={setTitle}
             maxLength={90}
+            containerStyle={styles.fieldSpacing}
           />
-        </View>
 
-        <View style={styles.fieldGroup}>
-          <Text style={styles.label}>Description</Text>
-          <TextInput
-            style={[styles.input, styles.textArea]}
-            placeholder="Include condition, age, accessories included, or rental terms..."
-            placeholderTextColor={BECHO_COLORS.textMuted}
+          <NativeInput
+            label="Description"
+            icon="document-text-outline"
+            placeholder="Condition, age, accessories included, or rental terms..."
             value={description}
             onChangeText={setDescription}
             multiline
             numberOfLines={4}
             textAlignVertical="top"
+            style={styles.textAreaInput}
+            containerStyle={styles.fieldSpacing}
           />
-        </View>
 
-        {/* 5. PRICING (ADAPTS TO SELL vs RENT) */}
-        <View style={styles.fieldGroup}>
-          <Text style={styles.label}>
-            {listingType === 'SELL' ? 'Selling Price (₹) *' : 'Rent Rate (₹) *'}
-          </Text>
-          <TextInput
-            style={styles.input}
+          <NativeInput
+            label={listingType === 'SELL' ? 'Selling Price (₹) *' : 'Rent Rate (₹) *'}
+            icon="cash-outline"
             placeholder={listingType === 'SELL' ? 'e.g. 45000' : 'e.g. 1200'}
-            placeholderTextColor={BECHO_COLORS.textMuted}
             keyboardType="numeric"
             value={price}
             onChangeText={setPrice}
+            containerStyle={listingType === 'RENT' ? styles.fieldSpacing : undefined}
           />
-        </View>
 
-        {listingType === 'RENT' && (
-          <>
-            <View style={styles.fieldGroup}>
-              <Text style={styles.label}>Billing Period</Text>
-              <View style={styles.periodRow}>
-                {RENT_PERIODS.map((p) => {
-                  const active = rentPeriod === p.value;
-                  return (
-                    <TouchableOpacity
-                      key={p.value}
-                      style={[styles.periodChip, active && styles.periodChipActive]}
-                      onPress={() => setRentPeriod(p.value)}
-                    >
-                      <Text style={[styles.periodText, active && styles.periodTextActive]}>
-                        {p.label}
-                      </Text>
-                    </TouchableOpacity>
-                  );
-                })}
+          {listingType === 'RENT' && (
+            <>
+              <View style={styles.fieldSpacing}>
+                <Text style={[styles.fieldSubLabel, { color: c.textSecondary }]}>
+                  Billing Period
+                </Text>
+                <View style={styles.periodRow}>
+                  {RENT_PERIODS.map((p) => {
+                    const active = rentPeriod === p.value;
+                    return (
+                      <HapticButton
+                        key={p.value}
+                        hapticStyle="selection"
+                        style={[
+                          styles.periodChip,
+                          {
+                            backgroundColor: active ? c.primaryMuted : c.surfaceElevated,
+                            borderRadius: theme.radius.md,
+                          },
+                        ]}
+                        onPress={() => setRentPeriod(p.value)}
+                      >
+                        <Text
+                          style={[
+                            styles.periodText,
+                            { color: active ? c.primary : c.textMuted },
+                          ]}
+                        >
+                          {p.label}
+                        </Text>
+                      </HapticButton>
+                    );
+                  })}
+                </View>
               </View>
-            </View>
 
-            <View style={styles.fieldGroup}>
-              <Text style={styles.label}>Refundable Security Deposit (₹) (optional)</Text>
-              <TextInput
-                style={styles.input}
+              <NativeInput
+                label="Refundable Security Deposit (₹)"
+                icon="shield-checkmark-outline"
                 placeholder="e.g. 3000"
-                placeholderTextColor={BECHO_COLORS.textMuted}
                 keyboardType="numeric"
                 value={securityDeposit}
                 onChangeText={setSecurityDeposit}
               />
-            </View>
-          </>
-        )}
-
-        {/* 6. LOCATION */}
-        <View style={styles.rowBetween}>
-          <Text style={styles.sectionLabel}>Location</Text>
-          <TouchableOpacity
-            style={styles.gpsBtn}
-            onPress={handleDetectLocation}
-            disabled={locating}
-          >
-            {locating ? (
-              <ActivityIndicator size="small" color={BECHO_COLORS.primary} />
-            ) : (
-              <>
-                <Ionicons name="locate-outline" size={16} color={BECHO_COLORS.primary} />
-                <Text style={styles.gpsBtnText}>Use Current GPS</Text>
-              </>
-            )}
-          </TouchableOpacity>
+            </>
+          )}
         </View>
 
-        <View style={styles.locationRow}>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.label}>City *</Text>
-            <TextInput
-              style={styles.input}
+        {/* 5. LOCATION BLOCK */}
+        <View
+          style={[
+            styles.surfaceBlock,
+            {
+              backgroundColor: c.surface,
+              borderRadius: theme.radius.xl,
+              ...getCardElevation(theme),
+            },
+          ]}
+        >
+          <View style={styles.rowBetween}>
+            <Text style={[styles.sectionLabel, { color: c.text }]}>Location</Text>
+            <HapticButton
+              hapticStyle="light"
+              style={[
+                styles.gpsBtn,
+                {
+                  backgroundColor: c.primaryMuted,
+                  borderRadius: theme.radius.full,
+                },
+              ]}
+              onPress={handleDetectLocation}
+              disabled={locating}
+            >
+              {locating ? (
+                <ActivityIndicator size="small" color={c.primary} />
+              ) : (
+                <>
+                  <Ionicons name="locate" size={14} color={c.primary} />
+                  <Text style={[styles.gpsBtnText, { color: c.primary }]}>Use GPS</Text>
+                </>
+              )}
+            </HapticButton>
+          </View>
+
+          <View style={styles.locationRow}>
+            <NativeInput
+              label="City *"
+              icon="business-outline"
               value={city}
               onChangeText={setCity}
               placeholder="Chennai"
-              placeholderTextColor={BECHO_COLORS.textMuted}
+              containerStyle={{ flex: 1 }}
             />
-          </View>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.label}>Neighborhood / Area</Text>
-            <TextInput
-              style={styles.input}
+            <NativeInput
+              label="Area"
+              icon="location-outline"
               value={locality}
               onChangeText={setLocality}
-              placeholder="e.g. Adyar, Anna Nagar"
-              placeholderTextColor={BECHO_COLORS.textMuted}
+              placeholder="Adyar"
+              containerStyle={{ flex: 1 }}
             />
           </View>
         </View>
 
-        {/* SUBMIT BUTTON */}
-        <TouchableOpacity
-          style={[styles.publishBtn, submitting && { opacity: 0.7 }]}
+        {/* PUBLISH CTA */}
+        <HapticButton
+          hapticStyle="medium"
+          style={[
+            styles.publishBtn,
+            {
+              backgroundColor: c.primary,
+              borderRadius: theme.radius.lg,
+              ...getCardElevation(theme),
+            },
+            submitting && { opacity: 0.7 },
+          ]}
           onPress={handlePublishAd}
           disabled={submitting}
         >
           {submitting ? (
-            <ActivityIndicator color="#052E16" />
+            <ActivityIndicator color={c.primaryText} />
           ) : (
             <>
-              <Ionicons name="checkmark-circle-outline" size={20} color="#052E16" />
-              <Text style={styles.publishBtnText}>
+              <Ionicons name="checkmark-circle" size={21} color={c.primaryText} />
+              <Text style={[styles.publishBtnText, { color: c.primaryText }]}>
                 {listingType === 'SELL' ? 'Publish Sale Ad' : 'Publish Rental Ad'}
               </Text>
             </>
           )}
-        </TouchableOpacity>
+        </HapticButton>
       </ScrollView>
     </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { padding: 16, paddingBottom: 40 },
+  page: { flex: 1 },
+  container: { paddingHorizontal: 16, paddingTop: 12, gap: 14 },
+  topStrip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  brandRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  screenTitle: { fontSize: 21, fontWeight: '900', letterSpacing: -0.4 },
+  screenSub: { fontSize: 12, fontWeight: '600', marginTop: 1 },
+  modeBadge: { paddingHorizontal: 11, paddingVertical: 5 },
+  modeBadgeText: { fontSize: 11, fontWeight: '900', letterSpacing: 0.4 },
   authGate: {
     flex: 1,
-    backgroundColor: BECHO_COLORS.bg,
     alignItems: 'center',
     justifyContent: 'center',
     padding: 28,
@@ -499,17 +721,12 @@ const styles = StyleSheet.create({
   gateIcon: {
     width: 72,
     height: 72,
-    borderRadius: 20,
-    backgroundColor: BECHO_COLORS.surface,
-    borderWidth: 1,
-    borderColor: BECHO_COLORS.border,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 16,
   },
-  gateTitle: { color: BECHO_COLORS.text, fontSize: 22, fontWeight: '800' },
+  gateTitle: { fontSize: 22, fontWeight: '900' },
   gateSub: {
-    color: BECHO_COLORS.textMuted,
     fontSize: 14,
     textAlign: 'center',
     marginTop: 8,
@@ -517,64 +734,60 @@ const styles = StyleSheet.create({
     lineHeight: 20,
   },
   primaryBtn: {
-    backgroundColor: BECHO_COLORS.primary,
     paddingHorizontal: 28,
     paddingVertical: 14,
-    borderRadius: 12,
   },
-  primaryBtnText: { color: '#052E16', fontSize: 15, fontWeight: '800' },
-  sectionLabel: {
-    color: BECHO_COLORS.text,
-    fontSize: 15,
-    fontWeight: '700',
-    marginBottom: 10,
-  },
-  helperText: { color: BECHO_COLORS.textMuted, fontSize: 12 },
-  rowBetween: {
+  primaryBtnText: { fontSize: 15, fontWeight: '800' },
+  segmentTrack: {
     flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginTop: 4,
+    padding: 4,
+    gap: 4,
   },
-  toggleRow: { flexDirection: 'row', gap: 12, marginBottom: 18 },
-  toggleChip: {
+  segmentBtn: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
-    paddingVertical: 13,
-    borderRadius: 12,
-    backgroundColor: BECHO_COLORS.surface,
-    borderWidth: 1,
-    borderColor: BECHO_COLORS.border,
+    gap: 7,
+    paddingVertical: 11,
   },
-  toggleChipSellActive: {
-    backgroundColor: BECHO_COLORS.primary,
-    borderColor: BECHO_COLORS.primary,
+  segmentText: { fontSize: 14, fontWeight: '800' },
+  surfaceBlock: {
+    padding: 16,
   },
-  toggleChipRentActive: {
-    backgroundColor: BECHO_COLORS.rentBadge,
-    borderColor: BECHO_COLORS.rentBadge,
+  rowBetween: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 12,
   },
-  toggleText: { color: BECHO_COLORS.text, fontSize: 15, fontWeight: '700' },
-  toggleTextActive: { color: '#052E16', fontWeight: '800' },
-  photoRow: { gap: 10, paddingBottom: 16 },
+  sectionLabel: {
+    fontSize: 15,
+    fontWeight: '800',
+    letterSpacing: -0.2,
+  },
+  helperText: { fontSize: 12, fontWeight: '600' },
+  photoRow: { gap: 10 },
   addPhotoBox: {
     width: 96,
     height: 96,
-    borderRadius: 14,
     borderWidth: 1.5,
     borderStyle: 'dashed',
-    borderColor: BECHO_COLORS.primary,
-    backgroundColor: BECHO_COLORS.surface,
     alignItems: 'center',
     justifyContent: 'center',
     gap: 4,
   },
-  addPhotoText: { color: BECHO_COLORS.primary, fontSize: 12, fontWeight: '700' },
-  photoPreviewWrap: { width: 96, height: 96, borderRadius: 14, overflow: 'hidden' },
+  addPhotoText: { fontSize: 12, fontWeight: '800' },
+  photoPreviewWrap: { width: 96, height: 96, overflow: 'hidden' },
   photoPreview: { width: '100%', height: '100%' },
+  coverTag: {
+    position: 'absolute',
+    bottom: 6,
+    left: 6,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+  },
+  coverTagText: { fontSize: 9, fontWeight: '900', letterSpacing: 0.3 },
   removePhotoBtn: {
     position: 'absolute',
     top: 6,
@@ -582,75 +795,44 @@ const styles = StyleSheet.create({
     width: 22,
     height: 22,
     borderRadius: 11,
-    backgroundColor: 'rgba(0,0,0,0.75)',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  chipRow: { gap: 8, paddingBottom: 18 },
+  chipRow: { gap: 8 },
   categoryChip: {
     paddingHorizontal: 14,
-    paddingVertical: 9,
-    borderRadius: 999,
-    backgroundColor: BECHO_COLORS.surface,
-    borderWidth: 1,
-    borderColor: BECHO_COLORS.border,
+    paddingVertical: 8,
   },
-  categoryChipActive: {
-    backgroundColor: BECHO_COLORS.primaryMuted,
-    borderColor: BECHO_COLORS.primary,
+  categoryText: { fontSize: 12, fontWeight: '700' },
+  fieldSpacing: { marginBottom: 14 },
+  textAreaInput: { minHeight: 88, paddingTop: 4 },
+  fieldSubLabel: {
+    fontSize: 12,
+    fontWeight: '700',
+    marginBottom: 6,
   },
-  categoryText: { color: BECHO_COLORS.textMuted, fontSize: 13, fontWeight: '600' },
-  categoryTextActive: { color: BECHO_COLORS.primary, fontWeight: '700' },
-  fieldGroup: { marginBottom: 14 },
-  label: { color: BECHO_COLORS.textMuted, fontSize: 13, fontWeight: '600', marginBottom: 6 },
-  input: {
-    backgroundColor: BECHO_COLORS.surfaceElevated,
-    borderWidth: 1,
-    borderColor: BECHO_COLORS.border,
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    color: BECHO_COLORS.text,
-    fontSize: 15,
-  },
-  textArea: { minHeight: 96, paddingTop: 12 },
-  periodRow: { flexDirection: 'row', gap: 10 },
+  periodRow: { flexDirection: 'row', gap: 8 },
   periodChip: {
     flex: 1,
     paddingVertical: 10,
-    borderRadius: 10,
-    backgroundColor: BECHO_COLORS.surface,
-    borderWidth: 1,
-    borderColor: BECHO_COLORS.border,
     alignItems: 'center',
   },
-  periodChipActive: {
-    backgroundColor: BECHO_COLORS.primaryMuted,
-    borderColor: BECHO_COLORS.primary,
-  },
-  periodText: { color: BECHO_COLORS.textMuted, fontSize: 13, fontWeight: '600' },
-  periodTextActive: { color: BECHO_COLORS.primary, fontWeight: '700' },
+  periodText: { fontSize: 13, fontWeight: '800' },
   gpsBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 5,
-    paddingHorizontal: 10,
+    paddingHorizontal: 11,
     paddingVertical: 6,
-    borderRadius: 8,
-    backgroundColor: BECHO_COLORS.surfaceElevated,
-    borderWidth: 1,
-    borderColor: BECHO_COLORS.border,
   },
-  gpsBtnText: { color: BECHO_COLORS.primary, fontSize: 12, fontWeight: '700' },
-  locationRow: { flexDirection: 'row', gap: 10, marginTop: 6, marginBottom: 22 },
+  gpsBtnText: { fontSize: 12, fontWeight: '800' },
+  locationRow: { flexDirection: 'row', gap: 10 },
   publishBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    backgroundColor: BECHO_COLORS.primary,
-    borderRadius: 14,
-    paddingVertical: 15,
+    paddingVertical: 16,
   },
-  publishBtnText: { color: '#052E16', fontSize: 16, fontWeight: '800' },
+  publishBtnText: { fontSize: 16, fontWeight: '900' },
 });

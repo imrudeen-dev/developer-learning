@@ -1,19 +1,24 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useRouter } from 'expo-router';
-import { useCallback, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
   RefreshControl,
   StyleSheet,
   Text,
-  TouchableOpacity,
   View,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import {
+  BechoLogoMark,
+  HapticButton,
+  NativeInput,
+} from '../../components/NativeUI';
 import { useAuth } from '../../lib/auth-context';
 import { formatTimeAgo } from '../../lib/listings';
 import { supabase } from '../../lib/supabase';
-import { BECHO_COLORS } from '../../lib/theme';
+import { getCardElevation, useBechoTheme } from '../../lib/theme';
 
 interface ThreadSummary {
   key: string;
@@ -27,9 +32,13 @@ interface ThreadSummary {
 
 export default function ChatsInboxScreen() {
   const { user } = useAuth();
+  const { theme } = useBechoTheme();
+  const insets = useSafeAreaInsets();
   const router = useRouter();
+  const c = theme.colors;
 
   const [threads, setThreads] = useState<ThreadSummary[]>([]);
+  const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -115,52 +124,148 @@ export default function ChatsInboxScreen() {
     }, [loadThreads])
   );
 
+  const filteredThreads = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return threads;
+    return threads.filter(
+      (t) =>
+        t.peerName.toLowerCase().includes(q) ||
+        t.listingTitle.toLowerCase().includes(q) ||
+        t.lastMessage.toLowerCase().includes(q)
+    );
+  }, [threads, searchQuery]);
+
   if (!user) {
     return (
-      <View style={styles.centered}>
-        <Ionicons name="chatbubbles-outline" size={44} color={BECHO_COLORS.primary} />
-        <Text style={styles.gateTitle}>Sign in to view your chats</Text>
-        <Text style={styles.gateSub}>
-          Message sellers directly about any item or rental on Becho.
-        </Text>
-        <TouchableOpacity
-          style={styles.primaryBtn}
-          onPress={() => router.push('/(tabs)/profile')}
-        >
-          <Text style={styles.primaryBtnText}>Sign In</Text>
-        </TouchableOpacity>
+      <View style={[styles.page, { backgroundColor: c.bg }]}>
+        <View style={styles.topStrip}>
+          <View style={styles.brandRow}>
+            <BechoLogoMark size={36} />
+            <Text style={[styles.screenTitle, { color: c.text }]}>Messages</Text>
+          </View>
+        </View>
+        <View style={styles.centered}>
+          <View
+            style={[
+              styles.gateIcon,
+              {
+                backgroundColor: c.surface,
+                borderRadius: theme.radius.xl,
+                ...getCardElevation(theme),
+              },
+            ]}
+          >
+            <Ionicons name="chatbubbles-outline" size={40} color={c.primary} />
+          </View>
+          <Text style={[styles.gateTitle, { color: c.text }]}>
+            Sign in to view your chats
+          </Text>
+          <Text style={[styles.gateSub, { color: c.textMuted }]}>
+            Message sellers directly about any item or rental on Becho.
+          </Text>
+          <HapticButton
+            hapticStyle="medium"
+            style={[
+              styles.primaryBtn,
+              {
+                backgroundColor: c.primary,
+                borderRadius: theme.radius.md,
+                ...getCardElevation(theme),
+              },
+            ]}
+            onPress={() => router.push('/(tabs)/profile')}
+          >
+            <Text style={[styles.primaryBtnText, { color: c.primaryText }]}>Sign In</Text>
+          </HapticButton>
+        </View>
       </View>
     );
   }
 
   if (loading) {
     return (
-      <View style={styles.centered}>
-        <ActivityIndicator size="large" color={BECHO_COLORS.primary} />
+      <View style={[styles.page, { backgroundColor: c.bg }]}>
+        <View style={styles.topStrip}>
+          <View style={styles.brandRow}>
+            <BechoLogoMark size={36} />
+            <Text style={[styles.screenTitle, { color: c.text }]}>Messages</Text>
+          </View>
+        </View>
+        <View style={styles.centered}>
+          <ActivityIndicator size="large" color={c.primary} />
+        </View>
       </View>
     );
   }
 
   return (
-    <View style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>Messages</Text>
+    <View style={[styles.page, { backgroundColor: c.bg }]}>
+      {/* TOP BRAND HEADER */}
+      <View style={styles.topStrip}>
+        <View style={styles.brandRow}>
+          <BechoLogoMark size={36} />
+          <View>
+            <Text style={[styles.screenTitle, { color: c.text }]}>Messages</Text>
+            <Text style={[styles.screenSub, { color: c.textMuted }]}>
+              {threads.length > 0
+                ? `${threads.length} active ${threads.length === 1 ? 'chat' : 'chats'}`
+                : 'Buyer & seller inbox'}
+            </Text>
+          </View>
+        </View>
       </View>
 
+      {/* SEARCH INBOX */}
+      {threads.length > 0 && (
+        <View style={styles.searchWrap}>
+          <NativeInput
+            icon="search-outline"
+            placeholder="Search people, ads, or messages..."
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+            rightElement={
+              searchQuery.length > 0 ? (
+                <HapticButton
+                  hapticStyle="selection"
+                  onPress={() => setSearchQuery('')}
+                >
+                  <Ionicons name="close-circle" size={18} color={c.textMuted} />
+                </HapticButton>
+              ) : undefined
+            }
+          />
+        </View>
+      )}
+
       <FlatList
-        data={threads}
+        data={filteredThreads}
         keyExtractor={(item) => item.key}
-        contentContainerStyle={styles.listContent}
+        contentContainerStyle={[
+          styles.listContent,
+          { paddingBottom: 104 + insets.bottom },
+        ]}
+        showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
             onRefresh={() => loadThreads(true)}
-            tintColor={BECHO_COLORS.primary}
+            tintColor={c.primary}
+            colors={[c.primary]}
+            progressBackgroundColor={c.surface}
           />
         }
         renderItem={({ item }) => (
-          <TouchableOpacity
-            style={styles.threadCard}
+          <HapticButton
+            hapticStyle="light"
+            scaleTo={0.98}
+            style={[
+              styles.threadCard,
+              {
+                backgroundColor: c.surface,
+                borderRadius: theme.radius.xl,
+                ...getCardElevation(theme),
+              },
+            ]}
             onPress={() =>
               router.push({
                 pathname: '/chat/[listingId]',
@@ -172,35 +277,63 @@ export default function ChatsInboxScreen() {
               })
             }
           >
-            <View style={styles.avatar}>
-              <Text style={styles.avatarText}>{item.peerName[0].toUpperCase()}</Text>
+            <View
+              style={[
+                styles.avatarRing,
+                { borderColor: c.primary, backgroundColor: c.primaryMuted },
+              ]}
+            >
+              <Text style={[styles.avatarText, { color: c.primary }]}>
+                {item.peerName[0].toUpperCase()}
+              </Text>
             </View>
+
             <View style={{ flex: 1 }}>
               <View style={styles.rowBetween}>
-                <Text style={styles.peerName} numberOfLines={1}>
+                <Text style={[styles.peerName, { color: c.text }]} numberOfLines={1}>
                   {item.peerName}
                 </Text>
-                <Text style={styles.time}>{formatTimeAgo(item.lastAt)}</Text>
+                <Text style={[styles.time, { color: c.textMuted }]}>
+                  {formatTimeAgo(item.lastAt)}
+                </Text>
               </View>
-              <Text style={styles.listingSub} numberOfLines={1}>
-                {item.listingTitle}
-              </Text>
-              <Text style={styles.preview} numberOfLines={1}>
+
+              <View
+                style={[
+                  styles.listingChip,
+                  { backgroundColor: c.surfaceElevated, borderRadius: theme.radius.sm },
+                ]}
+              >
+                <Text style={[styles.listingSub, { color: c.primary }]} numberOfLines={1}>
+                  {item.listingTitle}
+                </Text>
+              </View>
+
+              <Text style={[styles.preview, { color: c.textSecondary }]} numberOfLines={1}>
                 {item.lastMessage}
               </Text>
             </View>
-          </TouchableOpacity>
+
+            <Ionicons name="chevron-forward" size={18} color={c.textMuted} />
+          </HapticButton>
         )}
         ListEmptyComponent={
-          <View style={styles.emptyBox}>
-            <Ionicons
-              name="chatbox-ellipses-outline"
-              size={44}
-              color={BECHO_COLORS.textMuted}
-            />
-            <Text style={styles.emptyTitle}>No conversations yet</Text>
-            <Text style={styles.emptySub}>
-              Open any listing on Home and tap "Chat with Seller" to start.
+          <View
+            style={[
+              styles.emptyBox,
+              { backgroundColor: c.surface, borderRadius: theme.radius.xl },
+            ]}
+          >
+            <View style={[styles.emptyIconCircle, { backgroundColor: c.primaryMuted }]}>
+              <Ionicons name="chatbox-ellipses-outline" size={32} color={c.primary} />
+            </View>
+            <Text style={[styles.emptyTitle, { color: c.text }]}>
+              {searchQuery ? 'No matching chats' : 'No conversations yet'}
+            </Text>
+            <Text style={[styles.emptySub, { color: c.textMuted }]}>
+              {searchQuery
+                ? 'Try a different keyword or clear search.'
+                : 'Open any listing on Home and tap "Chat with Seller" to start.'}
             </Text>
           </View>
         }
@@ -210,64 +343,99 @@ export default function ChatsInboxScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: BECHO_COLORS.bg },
+  page: { flex: 1 },
+  topStrip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    paddingBottom: 8,
+  },
+  brandRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  screenTitle: { fontSize: 21, fontWeight: '900', letterSpacing: -0.4 },
+  screenSub: { fontSize: 12, fontWeight: '600', marginTop: 1 },
+  searchWrap: {
+    paddingHorizontal: 16,
+    paddingBottom: 6,
+  },
   centered: {
     flex: 1,
-    backgroundColor: BECHO_COLORS.bg,
     alignItems: 'center',
     justifyContent: 'center',
     padding: 24,
   },
-  header: {
-    paddingHorizontal: 16,
-    paddingTop: 14,
-    paddingBottom: 12,
-    backgroundColor: BECHO_COLORS.surface,
-    borderBottomWidth: 1,
-    borderBottomColor: BECHO_COLORS.border,
-  },
-  headerTitle: { color: BECHO_COLORS.text, fontSize: 20, fontWeight: '800' },
-  listContent: { padding: 14, gap: 10 },
+  listContent: { paddingHorizontal: 16, paddingTop: 6, gap: 12 },
   threadCard: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-    backgroundColor: BECHO_COLORS.surface,
-    borderWidth: 1,
-    borderColor: BECHO_COLORS.border,
-    padding: 12,
-    borderRadius: 14,
+    padding: 14,
   },
-  avatar: {
-    width: 46,
-    height: 46,
-    borderRadius: 23,
-    backgroundColor: BECHO_COLORS.primaryMuted,
+  avatarRing: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    borderWidth: 1.5,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  avatarText: { color: BECHO_COLORS.primary, fontSize: 18, fontWeight: '800' },
-  rowBetween: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
-  peerName: { color: BECHO_COLORS.text, fontSize: 15, fontWeight: '700', flex: 1 },
-  time: { color: BECHO_COLORS.textMuted, fontSize: 11 },
-  listingSub: { color: BECHO_COLORS.primary, fontSize: 12, fontWeight: '600', marginTop: 1 },
-  preview: { color: BECHO_COLORS.textMuted, fontSize: 13, marginTop: 3 },
-  gateTitle: { color: BECHO_COLORS.text, fontSize: 18, fontWeight: '800', marginTop: 12 },
+  avatarText: { fontSize: 19, fontWeight: '900' },
+  rowBetween: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
+  peerName: { fontSize: 15, fontWeight: '800', flex: 1, letterSpacing: -0.2 },
+  time: { fontSize: 11, fontWeight: '600' },
+  listingChip: {
+    alignSelf: 'flex-start',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    marginTop: 4,
+    maxWidth: '95%',
+  },
+  listingSub: { fontSize: 11, fontWeight: '700' },
+  preview: { fontSize: 13, marginTop: 5, fontWeight: '500' },
+  gateIcon: {
+    width: 72,
+    height: 72,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 4,
+  },
+  gateTitle: { fontSize: 19, fontWeight: '900', marginTop: 12 },
   gateSub: {
-    color: BECHO_COLORS.textMuted,
     fontSize: 13,
     textAlign: 'center',
     marginTop: 6,
     marginBottom: 20,
+    lineHeight: 19,
   },
   primaryBtn: {
-    backgroundColor: BECHO_COLORS.primary,
     paddingHorizontal: 26,
-    paddingVertical: 12,
-    borderRadius: 10,
+    paddingVertical: 13,
   },
-  primaryBtnText: { color: '#052E16', fontWeight: '800' },
-  emptyBox: { alignItems: 'center', paddingTop: 72, paddingHorizontal: 24 },
-  emptyTitle: { color: BECHO_COLORS.text, fontSize: 16, fontWeight: '700', marginTop: 10 },
-  emptySub: { color: BECHO_COLORS.textMuted, fontSize: 13, textAlign: 'center', marginTop: 4 },
+  primaryBtnText: { fontWeight: '800', fontSize: 15 },
+  emptyBox: {
+    alignItems: 'center',
+    marginTop: 28,
+    paddingVertical: 36,
+    paddingHorizontal: 24,
+  },
+  emptyIconCircle: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  emptyTitle: { fontSize: 16, fontWeight: '800', marginTop: 14 },
+  emptySub: {
+    fontSize: 13,
+    textAlign: 'center',
+    marginTop: 6,
+    lineHeight: 19,
+  },
 });

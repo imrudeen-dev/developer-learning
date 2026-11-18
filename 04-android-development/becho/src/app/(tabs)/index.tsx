@@ -1,8 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useRouter } from 'expo-router';
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import {
-  ActivityIndicator,
   FlatList,
   Image,
   RefreshControl,
@@ -10,18 +9,26 @@ import {
   StyleSheet,
   Text,
   TextInput,
-  TouchableOpacity,
   View,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import {
+  BechoLogoMark,
+  HapticButton,
+  ListingSkeletonGrid,
+} from '../../components/NativeUI';
 import { BECHO_CATEGORIES } from '../../lib/constants';
 import { Listing, formatListingPrice, formatTimeAgo } from '../../lib/listings';
 import { supabase } from '../../lib/supabase';
-import { BECHO_COLORS } from '../../lib/theme';
+import { getCardElevation, useBechoTheme } from '../../lib/theme';
 
 type TypeFilter = 'ALL' | 'SELL' | 'RENT';
 
 export default function HomeFeedScreen() {
   const router = useRouter();
+  const { theme } = useBechoTheme();
+  const insets = useSafeAreaInsets();
+  const c = theme.colors;
 
   const [listings, setListings] = useState<Listing[]>([]);
   const [loading, setLoading] = useState(true);
@@ -30,6 +37,14 @@ export default function HomeFeedScreen() {
   const [typeFilter, setTypeFilter] = useState<TypeFilter>('ALL');
   const [selectedCategory, setSelectedCategory] = useState<string>('All');
   const [searchQuery, setSearchQuery] = useState('');
+  const [debouncedQuery, setDebouncedQuery] = useState('');
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedQuery(searchQuery.trim());
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
 
   const fetchListings = useCallback(
     async (isRefresh = false) => {
@@ -78,9 +93,10 @@ export default function HomeFeedScreen() {
           query = query.eq('category', selectedCategory);
         }
 
-        const trimmed = searchQuery.trim();
-        if (trimmed) {
-          query = query.or(`title.ilike.%${trimmed}%,description.ilike.%${trimmed}%`);
+        if (debouncedQuery) {
+          query = query.or(
+            `title.ilike.%${debouncedQuery}%,description.ilike.%${debouncedQuery}%`
+          );
         }
 
         const { data, error } = await query;
@@ -93,7 +109,7 @@ export default function HomeFeedScreen() {
         setRefreshing(false);
       }
     },
-    [typeFilter, selectedCategory, searchQuery]
+    [typeFilter, selectedCategory, debouncedQuery]
   );
 
   useFocusEffect(
@@ -108,31 +124,49 @@ export default function HomeFeedScreen() {
     const locationLabel = [item.locality, item.city].filter(Boolean).join(', ');
 
     return (
-      <TouchableOpacity
-        style={styles.card}
-        activeOpacity={0.85}
+      <HapticButton
+        hapticStyle="light"
+        scaleTo={0.97}
+        style={[
+          styles.card,
+          {
+            backgroundColor: c.surface,
+            borderRadius: theme.radius.lg,
+            ...getCardElevation(theme),
+          },
+        ]}
         onPress={() => router.push(`/listing/${item.id}`)}
       >
-        <View style={styles.imageWrap}>
+        <View style={[styles.imageWrap, { backgroundColor: c.surfaceElevated }]}>
           {coverImage ? (
             <Image source={{ uri: coverImage }} style={styles.cardImage} />
           ) : (
             <View style={styles.placeholderImage}>
-              <Ionicons name="image-outline" size={30} color={BECHO_COLORS.textMuted} />
+              <Ionicons name="image-outline" size={30} color={c.textMuted} />
             </View>
           )}
 
           <View
             style={[
               styles.badge,
-              isRent ? styles.badgeRent : styles.badgeSell,
+              {
+                backgroundColor: isRent ? c.rentBadge : c.sellBadge,
+                borderRadius: theme.radius.sm,
+              },
             ]}
           >
-            <Text style={styles.badgeText}>{isRent ? 'RENT' : 'BUY'}</Text>
+            <Text
+              style={[
+                styles.badgeText,
+                { color: isRent ? c.rentText : c.sellText },
+              ]}
+            >
+              {isRent ? 'FOR RENT' : 'FOR SALE'}
+            </Text>
           </View>
 
           {item.images && item.images.length > 1 && (
-            <View style={styles.photoCountPill}>
+            <View style={[styles.photoCountPill, { backgroundColor: c.overlay }]}>
               <Ionicons name="images-outline" size={11} color="#FFF" />
               <Text style={styles.photoCountText}>{item.images.length}</Text>
             </View>
@@ -140,66 +174,109 @@ export default function HomeFeedScreen() {
         </View>
 
         <View style={styles.cardBody}>
-          <Text style={styles.priceText} numberOfLines={1}>
+          <Text style={[styles.priceText, { color: c.primary }]} numberOfLines={1}>
             {formatListingPrice(item)}
           </Text>
-          <Text style={styles.titleText} numberOfLines={2}>
+          <Text style={[styles.titleText, { color: c.text }]} numberOfLines={2}>
             {item.title}
           </Text>
 
           <View style={styles.metaRow}>
-            <Ionicons name="location-outline" size={13} color={BECHO_COLORS.textMuted} />
-            <Text style={styles.metaText} numberOfLines={1}>
+            <Ionicons name="location-outline" size={13} color={c.textMuted} />
+            <Text style={[styles.metaText, { color: c.textMuted }]} numberOfLines={1}>
               {locationLabel || 'Chennai'}
             </Text>
           </View>
 
-          <View style={styles.footerRow}>
-            <Text style={styles.categoryTag} numberOfLines={1}>
+          <View style={[styles.footerRow, { borderTopColor: c.border }]}>
+            <Text style={[styles.categoryTag, { color: c.textMuted }]} numberOfLines={1}>
               {item.category}
             </Text>
-            <Text style={styles.timeText}>{formatTimeAgo(item.created_at)}</Text>
+            <Text style={[styles.timeText, { color: c.textMuted }]}>
+              {formatTimeAgo(item.created_at)}
+            </Text>
           </View>
         </View>
-      </TouchableOpacity>
+      </HapticButton>
     );
   };
 
   return (
-    <View style={styles.container}>
-      {/* HEADER */}
-      <View style={styles.header}>
-        <View>
-          <Text style={styles.brand}>Becho</Text>
-          <Text style={styles.tagline}>Local Buy & Rent Marketplace</Text>
+    <View style={[styles.container, { backgroundColor: c.bg }]}>
+      {/* TOP BRAND & ACTION BAR */}
+      <View style={styles.topBar}>
+        <View style={styles.brandRow}>
+          <BechoLogoMark size={38} />
+          <View>
+            <Text style={[styles.brandTitle, { color: c.text }]}>Becho</Text>
+            <View style={styles.locationSubRow}>
+              <Ionicons name="location" size={12} color={c.primary} />
+              <Text style={[styles.locationSubText, { color: c.textMuted }]}>
+                Chennai Marketplace
+              </Text>
+            </View>
+          </View>
         </View>
-        <View style={styles.cityPill}>
-          <Ionicons name="location" size={14} color={BECHO_COLORS.primary} />
-          <Text style={styles.cityPillText}>Chennai</Text>
-        </View>
+
+        <HapticButton
+          hapticStyle="medium"
+          style={[
+            styles.postPill,
+            {
+              backgroundColor: c.primary,
+              borderRadius: theme.radius.full,
+              ...getCardElevation(theme),
+            },
+          ]}
+          onPress={() => router.push('/(tabs)/post')}
+        >
+          <Ionicons name="add" size={17} color={c.primaryText} />
+          <Text style={[styles.postPillText, { color: c.primaryText }]}>Post Ad</Text>
+        </HapticButton>
       </View>
 
-      {/* SEARCH BAR */}
-      <View style={styles.searchBox}>
-        <Ionicons name="search-outline" size={18} color={BECHO_COLORS.textMuted} />
+      {/* NATIVE FILLED SEARCH BAR */}
+      <View
+        style={[
+          styles.searchBox,
+          {
+            backgroundColor: c.surface,
+            borderRadius: theme.radius.lg,
+            ...getCardElevation(theme),
+          },
+        ]}
+      >
+        <Ionicons name="search" size={19} color={c.primary} />
         <TextInput
-          style={styles.searchInput}
-          placeholder="Search phones, bikes, cameras, rooms..."
-          placeholderTextColor={BECHO_COLORS.textMuted}
+          style={[styles.searchInput, { color: c.text }]}
+          placeholder="Search phones, bikes, cameras, rentals..."
+          placeholderTextColor={c.textMuted}
           value={searchQuery}
           onChangeText={setSearchQuery}
           returnKeyType="search"
           onSubmitEditing={() => fetchListings(false)}
         />
         {searchQuery.length > 0 && (
-          <TouchableOpacity onPress={() => setSearchQuery('')}>
-            <Ionicons name="close-circle" size={18} color={BECHO_COLORS.textMuted} />
-          </TouchableOpacity>
+          <HapticButton
+            hapticStyle="selection"
+            onPress={() => setSearchQuery('')}
+            style={styles.clearBtn}
+          >
+            <Ionicons name="close-circle" size={18} color={c.textMuted} />
+          </HapticButton>
         )}
       </View>
 
-      {/* ALL / BUY / RENT FILTER */}
-      <View style={styles.modeRow}>
+      {/* SEGMENTED BUY / RENT / ALL SWITCHER */}
+      <View
+        style={[
+          styles.segmentTrack,
+          {
+            backgroundColor: c.surface,
+            borderRadius: theme.radius.lg,
+          },
+        ]}
+      >
         {(
           [
             { key: 'ALL', label: 'All Ads' },
@@ -209,46 +286,70 @@ export default function HomeFeedScreen() {
         ).map((tab) => {
           const active = typeFilter === tab.key;
           return (
-            <TouchableOpacity
+            <HapticButton
               key={tab.key}
-              style={[styles.modeBtn, active && styles.modeBtnActive]}
+              hapticStyle="selection"
+              scaleTo={0.98}
+              style={[
+                styles.segmentBtn,
+                {
+                  backgroundColor: active ? c.primary : 'transparent',
+                  borderRadius: theme.radius.md,
+                },
+              ]}
               onPress={() => setTypeFilter(tab.key)}
             >
-              <Text style={[styles.modeBtnText, active && styles.modeBtnTextActive]}>
+              <Text
+                style={[
+                  styles.segmentText,
+                  { color: active ? c.primaryText : c.textMuted },
+                ]}
+              >
                 {tab.label}
               </Text>
-            </TouchableOpacity>
+            </HapticButton>
           );
         })}
       </View>
 
-      {/* CATEGORY CHIPS */}
+      {/* HORIZONTAL CATEGORY CHIPS */}
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
+        style={styles.categoryScrollView}
         contentContainerStyle={styles.categoryScroll}
       >
         {['All', ...BECHO_CATEGORIES].map((cat) => {
           const active = selectedCategory === cat;
           return (
-            <TouchableOpacity
+            <HapticButton
               key={cat}
-              style={[styles.catChip, active && styles.catChipActive]}
+              hapticStyle="selection"
+              style={[
+                styles.catChip,
+                {
+                  backgroundColor: active ? c.primaryMuted : c.surface,
+                  borderRadius: theme.radius.full,
+                },
+              ]}
               onPress={() => setSelectedCategory(cat)}
             >
-              <Text style={[styles.catChipText, active && styles.catChipTextActive]}>
+              <Text
+                style={[
+                  styles.catChipText,
+                  { color: active ? c.primary : c.textSecondary },
+                ]}
+              >
                 {cat}
               </Text>
-            </TouchableOpacity>
+            </HapticButton>
           );
         })}
       </ScrollView>
 
-      {/* FEED LIST */}
-      {loading ? (
-        <View style={styles.centered}>
-          <ActivityIndicator size="large" color={BECHO_COLORS.primary} />
-        </View>
+      {/* LISTING FEED */}
+      {loading && listings.length === 0 ? (
+        <ListingSkeletonGrid />
       ) : (
         <FlatList
           data={listings}
@@ -256,27 +357,54 @@ export default function HomeFeedScreen() {
           renderItem={renderListingCard}
           numColumns={2}
           columnWrapperStyle={styles.columnWrapper}
-          contentContainerStyle={styles.listContent}
+          contentContainerStyle={[
+            styles.listContent,
+            { paddingBottom: 96 + insets.bottom },
+          ]}
+          showsVerticalScrollIndicator={false}
           refreshControl={
             <RefreshControl
               refreshing={refreshing}
               onRefresh={() => fetchListings(true)}
-              tintColor={BECHO_COLORS.primary}
+              tintColor={c.primary}
+              colors={[c.primary]}
+              progressBackgroundColor={c.surface}
             />
           }
           ListEmptyComponent={
-            <View style={styles.emptyState}>
-              <Ionicons name="search-outline" size={44} color={BECHO_COLORS.textMuted} />
-              <Text style={styles.emptyTitle}>No matching ads found</Text>
-              <Text style={styles.emptySub}>
-                Try clearing filters or be the first to post an ad in this category.
+            <View
+              style={[
+                styles.emptyState,
+                {
+                  backgroundColor: c.surface,
+                  borderRadius: theme.radius.xl,
+                },
+              ]}
+            >
+              <View style={[styles.emptyIconCircle, { backgroundColor: c.primaryMuted }]}>
+                <Ionicons name="sparkles-outline" size={32} color={c.primary} />
+              </View>
+              <Text style={[styles.emptyTitle, { color: c.text }]}>
+                No matching ads yet
               </Text>
-              <TouchableOpacity
-                style={styles.postShortcutBtn}
+              <Text style={[styles.emptySub, { color: c.textMuted }]}>
+                Clear active filters or list the first item in this category.
+              </Text>
+              <HapticButton
+                hapticStyle="medium"
+                style={[
+                  styles.postShortcutBtn,
+                  {
+                    backgroundColor: c.primary,
+                    borderRadius: theme.radius.md,
+                  },
+                ]}
                 onPress={() => router.push('/(tabs)/post')}
               >
-                <Text style={styles.postShortcutText}>Post an Ad</Text>
-              </TouchableOpacity>
+                <Text style={[styles.postShortcutText, { color: c.primaryText }]}>
+                  Post an Ad
+                </Text>
+              </HapticButton>
             </View>
           }
         />
@@ -286,148 +414,216 @@ export default function HomeFeedScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: BECHO_COLORS.bg },
-  centered: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  header: {
+  container: { flex: 1 },
+  topBar: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
-    paddingTop: 14,
+    paddingTop: 12,
     paddingBottom: 10,
   },
-  brand: { color: BECHO_COLORS.text, fontSize: 24, fontWeight: '900', letterSpacing: -0.5 },
-  tagline: { color: BECHO_COLORS.textMuted, fontSize: 12 },
-  cityPill: {
+  brandRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 11,
+  },
+  brandTitle: {
+    fontSize: 21,
+    fontWeight: '900',
+    letterSpacing: -0.4,
+  },
+  locationSubRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    marginTop: 1,
+  },
+  locationSubText: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  postPill: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: BECHO_COLORS.surface,
-    borderWidth: 1,
-    borderColor: BECHO_COLORS.border,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 999,
+    paddingHorizontal: 14,
+    paddingVertical: 9,
   },
-  cityPillText: { color: BECHO_COLORS.text, fontSize: 12, fontWeight: '700' },
+  postPillText: {
+    fontSize: 13,
+    fontWeight: '800',
+  },
   searchBox: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    backgroundColor: BECHO_COLORS.surface,
-    borderWidth: 1,
-    borderColor: BECHO_COLORS.border,
-    borderRadius: 12,
+    gap: 10,
     marginHorizontal: 16,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
+    marginTop: 4,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
   },
-  searchInput: { flex: 1, color: BECHO_COLORS.text, fontSize: 14, padding: 0 },
-  modeRow: {
-    flexDirection: 'row',
-    gap: 8,
-    paddingHorizontal: 16,
-    marginTop: 12,
-  },
-  modeBtn: {
+  searchInput: {
     flex: 1,
-    paddingVertical: 8,
-    borderRadius: 10,
-    backgroundColor: BECHO_COLORS.surface,
-    borderWidth: 1,
-    borderColor: BECHO_COLORS.border,
+    fontSize: 14,
+    fontWeight: '500',
+    padding: 0,
+  },
+  clearBtn: {
+    padding: 2,
+  },
+  segmentTrack: {
+    flexDirection: 'row',
+    marginHorizontal: 16,
+    marginTop: 12,
+    padding: 4,
+    gap: 4,
+  },
+  segmentBtn: {
+    flex: 1,
+    paddingVertical: 9,
     alignItems: 'center',
+    justifyContent: 'center',
   },
-  modeBtnActive: {
-    backgroundColor: BECHO_COLORS.primary,
-    borderColor: BECHO_COLORS.primary,
+  segmentText: {
+    fontSize: 13,
+    fontWeight: '800',
   },
-  modeBtnText: { color: BECHO_COLORS.textMuted, fontSize: 13, fontWeight: '700' },
-  modeBtnTextActive: { color: '#052E16', fontWeight: '800' },
+  categoryScrollView: {
+    flexGrow: 0,
+    flexShrink: 0,
+  },
   categoryScroll: {
     paddingHorizontal: 16,
     paddingVertical: 12,
     gap: 8,
+    alignItems: 'flex-start',
   },
   catChip: {
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-    borderRadius: 999,
-    backgroundColor: BECHO_COLORS.surface,
-    borderWidth: 1,
-    borderColor: BECHO_COLORS.border,
+    alignSelf: 'flex-start',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
   },
-  catChipActive: {
-    backgroundColor: BECHO_COLORS.primaryMuted,
-    borderColor: BECHO_COLORS.primary,
+  catChipText: {
+    fontSize: 12,
+    fontWeight: '700',
   },
-  catChipText: { color: BECHO_COLORS.textMuted, fontSize: 12, fontWeight: '600' },
-  catChipTextActive: { color: BECHO_COLORS.primary, fontWeight: '700' },
-  listContent: { paddingHorizontal: 16, paddingBottom: 28 },
-  columnWrapper: { justifyContent: 'space-between', gap: 12 },
+  listContent: {
+    paddingHorizontal: 16,
+    paddingTop: 2,
+  },
+  columnWrapper: {
+    justifyContent: 'space-between',
+    gap: 12,
+  },
   card: {
     flex: 1,
     maxWidth: '48.5%',
-    backgroundColor: BECHO_COLORS.surface,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: BECHO_COLORS.border,
     overflow: 'hidden',
-    marginBottom: 12,
+    marginBottom: 14,
   },
-  imageWrap: { width: '100%', height: 132, backgroundColor: BECHO_COLORS.surfaceElevated },
-  cardImage: { width: '100%', height: '100%' },
-  placeholderImage: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  imageWrap: {
+    width: '100%',
+    height: 142,
+  },
+  cardImage: {
+    width: '100%',
+    height: '100%',
+  },
+  placeholderImage: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   badge: {
     position: 'absolute',
-    top: 8,
-    left: 8,
+    top: 9,
+    left: 9,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+  },
+  badgeText: {
+    fontSize: 10,
+    fontWeight: '900',
+    letterSpacing: 0.4,
+  },
+  photoCountPill: {
+    position: 'absolute',
+    bottom: 9,
+    right: 9,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
     paddingHorizontal: 7,
     paddingVertical: 3,
     borderRadius: 6,
   },
-  badgeSell: { backgroundColor: BECHO_COLORS.primary },
-  badgeRent: { backgroundColor: BECHO_COLORS.rentBadge },
-  badgeText: { color: '#052E16', fontSize: 10, fontWeight: '900' },
-  photoCountPill: {
-    position: 'absolute',
-    bottom: 8,
-    right: 8,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 3,
-    backgroundColor: 'rgba(0,0,0,0.65)',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 6,
+  photoCountText: {
+    color: '#FFF',
+    fontSize: 10,
+    fontWeight: '700',
   },
-  photoCountText: { color: '#FFF', fontSize: 10, fontWeight: '700' },
-  cardBody: { padding: 10 },
-  priceText: { color: BECHO_COLORS.primary, fontSize: 15, fontWeight: '800' },
+  cardBody: {
+    padding: 12,
+  },
+  priceText: {
+    fontSize: 16,
+    fontWeight: '900',
+    letterSpacing: -0.2,
+  },
   titleText: {
-    color: BECHO_COLORS.text,
     fontSize: 13,
     fontWeight: '600',
     marginTop: 4,
     lineHeight: 18,
   },
-  metaRow: { flexDirection: 'row', alignItems: 'center', gap: 3, marginTop: 8 },
-  metaText: { color: BECHO_COLORS.textMuted, fontSize: 11, flex: 1 },
+  metaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: 8,
+  },
+  metaText: {
+    fontSize: 11,
+    flex: 1,
+    fontWeight: '500',
+  },
   footerRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginTop: 8,
-    paddingTop: 6,
-    borderTopWidth: 1,
-    borderTopColor: BECHO_COLORS.border,
+    marginTop: 9,
+    paddingTop: 7,
+    borderTopWidth: StyleSheet.hairlineWidth,
   },
-  categoryTag: { color: BECHO_COLORS.textMuted, fontSize: 10, flex: 1 },
-  timeText: { color: BECHO_COLORS.textMuted, fontSize: 10 },
-  emptyState: { alignItems: 'center', paddingTop: 64, paddingHorizontal: 24 },
-  emptyTitle: { color: BECHO_COLORS.text, fontSize: 17, fontWeight: '700', marginTop: 12 },
+  categoryTag: {
+    fontSize: 10,
+    flex: 1,
+    fontWeight: '600',
+  },
+  timeText: {
+    fontSize: 10,
+    fontWeight: '500',
+  },
+  emptyState: {
+    alignItems: 'center',
+    marginTop: 28,
+    paddingVertical: 36,
+    paddingHorizontal: 24,
+  },
+  emptyIconCircle: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  emptyTitle: {
+    fontSize: 17,
+    fontWeight: '800',
+    marginTop: 14,
+  },
   emptySub: {
-    color: BECHO_COLORS.textMuted,
     fontSize: 13,
     textAlign: 'center',
     marginTop: 6,
@@ -435,10 +631,11 @@ const styles = StyleSheet.create({
   },
   postShortcutBtn: {
     marginTop: 18,
-    backgroundColor: BECHO_COLORS.primary,
-    paddingHorizontal: 20,
-    paddingVertical: 11,
-    borderRadius: 10,
+    paddingHorizontal: 22,
+    paddingVertical: 12,
   },
-  postShortcutText: { color: '#052E16', fontWeight: '800', fontSize: 14 },
+  postShortcutText: {
+    fontWeight: '800',
+    fontSize: 14,
+  },
 });
