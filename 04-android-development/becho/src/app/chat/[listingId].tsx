@@ -3,17 +3,17 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
     ActivityIndicator,
-    Alert,
     FlatList,
     KeyboardAvoidingView,
     Platform,
     StyleSheet,
-    Text,
-    TextInput,
     TouchableOpacity,
     View,
 } from 'react-native';
+import { AppText as Text, AppTextInput as TextInput } from '../../components/app-text';
+import { ChatLocationSharing } from '../../components/chat-location-sharing';
 import { useAuth } from '../../lib/auth-context';
+import { useAppPreferences } from '../../lib/app-preferences';
 import { formatTimeAgo } from '../../lib/listings';
 import { supabase } from '../../lib/supabase';
 import { BECHO_COLORS } from '../../lib/theme';
@@ -36,15 +36,18 @@ export default function ChatThreadScreen() {
   }>();
   const router = useRouter();
   const { user } = useAuth();
+  const { theme, t } = useAppPreferences();
 
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [draft, setDraft] = useState('');
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
+  const [sendError, setSendError] = useState('');
   const [resolvedPeerId, setResolvedPeerId] = useState<string | null>(
     peerId || sellerId || null
   );
   const [listingTitle, setListingTitle] = useState<string>(title || 'Listing Chat');
+  const isSelfChat = Boolean(user && resolvedPeerId === user.id);
 
   const listRef = useRef<FlatList<ChatMessage>>(null);
 
@@ -168,12 +171,18 @@ export default function ChatThreadScreen() {
     if (!text || !user || !listingId) return;
 
     if (!resolvedPeerId) {
-      Alert.alert('Cannot Send', 'Waiting for buyer/seller context.');
+      setSendError(t('missingChatParticipant'));
+      return;
+    }
+
+    if (resolvedPeerId === user.id) {
+      setSendError(t('cannotMessageYourself'));
       return;
     }
 
     setSending(true);
     setDraft('');
+    setSendError('');
 
     try {
       const { data, error } = await supabase
@@ -194,9 +203,24 @@ export default function ChatThreadScreen() {
           prev.some((m) => m.id === data.id) ? prev : [...prev, data as ChatMessage]
         );
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       setDraft(text);
-      Alert.alert('Message Failed', err.message ?? 'Could not send message');
+      console.error('[Becho] Could not send chat message:', err);
+      const errorMessage =
+        err instanceof Error
+          ? err.message
+          : typeof err === 'object' &&
+              err !== null &&
+              'message' in err &&
+              typeof err.message === 'string'
+            ? err.message
+            : t('sendMessageError');
+      setSendError(
+        errorMessage.toLowerCase().includes('row-level security') ||
+          errorMessage.toLowerCase().includes('permission denied')
+          ? t('chatPermissionError')
+          : errorMessage
+      );
     } finally {
       setSending(false);
     }
@@ -204,13 +228,14 @@ export default function ChatThreadScreen() {
 
   if (!user) {
     return (
-      <View style={styles.centered}>
-        <Text style={styles.gateText}>Sign in to chat with sellers.</Text>
+      <View style={[styles.centered, { backgroundColor: theme.background }]}>
+        <Text style={styles.gateText}>{t('signInToChatTitle')}</Text>
+        <Text style={styles.emptySub}>{t('signInToChat')}</Text>
         <TouchableOpacity
           style={styles.signInBtn}
           onPress={() => router.replace('/(tabs)/profile')}
         >
-          <Text style={styles.signInBtnText}>Go to Sign In</Text>
+          <Text style={styles.signInBtnText}>{t('goToSignIn')}</Text>
         </TouchableOpacity>
       </View>
     );
@@ -218,26 +243,49 @@ export default function ChatThreadScreen() {
 
   return (
     <KeyboardAvoidingView
-      style={styles.screen}
+      style={[styles.screen, { backgroundColor: theme.background }]}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       keyboardVerticalOffset={Platform.OS === 'ios' ? 64 : 0}
     >
       {/* HEADER */}
-      <View style={styles.header}>
-        <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
-          <Ionicons name="arrow-back" size={22} color={BECHO_COLORS.text} />
+      <View style={[styles.header, { backgroundColor: theme.surface, borderBottomColor: theme.border }]}>
+        <TouchableOpacity
+          style={[styles.backBtn, { backgroundColor: theme.background }]}
+          onPress={() => {
+            if (router.canGoBack()) router.back();
+            else router.replace('/(tabs)/chats');
+          }}
+          accessibilityRole="button"
+          accessibilityLabel={t('goBack')}
+        >
+          <Ionicons name="arrow-back" size={22} color="#f8fafc" />
         </TouchableOpacity>
         <View style={{ flex: 1 }}>
           <Text style={styles.headerTitle} numberOfLines={1}>
             {listingTitle}
           </Text>
-          <Text style={styles.headerSub}>Live Becho Chat</Text>
+          <Text style={[styles.headerSub, { color: theme.primary }]}>{t('messages')}</Text>
         </View>
       </View>
 
+      <View style={styles.safetyNotice} accessibilityRole="summary">
+        <Ionicons name="shield-checkmark-outline" size={17} color="#fcd34d" />
+        <Text style={styles.safetyNoticeText}>
+          {t('safeChatTitle')}: {t('safeChatBody')}
+        </Text>
+      </View>
+
+      {resolvedPeerId && !isSelfChat && (
+        <ChatLocationSharing
+          listingId={listingId}
+          userId={user.id}
+          peerId={resolvedPeerId}
+        />
+      )}
+
       {loading ? (
-        <View style={styles.centered}>
-          <ActivityIndicator size="large" color={BECHO_COLORS.primary} />
+        <View style={[styles.centered, { backgroundColor: theme.background }]}>
+          <ActivityIndicator size="large" color={theme.primary} />
         </View>
       ) : (
         <FlatList
@@ -250,7 +298,14 @@ export default function ChatThreadScreen() {
             const mine = item.sender_id === user.id;
             return (
               <View style={[styles.bubbleRow, mine ? styles.rowMine : styles.rowTheirs]}>
-                <View style={[styles.bubble, mine ? styles.bubbleMine : styles.bubbleTheirs]}>
+                <View
+                  style={[
+                    styles.bubble,
+                    mine
+                      ? [styles.bubbleMine, { backgroundColor: theme.primary }]
+                      : [styles.bubbleTheirs, { backgroundColor: theme.surface, borderColor: theme.border }],
+                  ]}
+                >
                   <Text style={[styles.bubbleText, mine && styles.bubbleTextMine]}>
                     {item.content}
                   </Text>
@@ -268,20 +323,34 @@ export default function ChatThreadScreen() {
                 size={42}
                 color={BECHO_COLORS.textMuted}
               />
-              <Text style={styles.emptyTitle}>Start the conversation</Text>
+              <Text style={styles.emptyTitle}>{t('startConversation')}</Text>
               <Text style={styles.emptySub}>
-                Ask about item condition, availability, or pickup spot.
+                {t('askSellerHint')}
               </Text>
             </View>
           }
         />
       )}
 
+      {!!(sendError || isSelfChat) && (
+        <Text accessibilityRole="alert" style={styles.sendError}>
+          {sendError || t('cannotMessageYourself')}
+        </Text>
+      )}
+
       {/* INPUT COMPOSER */}
-      <View style={styles.composer}>
+      <View
+        style={[
+          styles.composer,
+          { backgroundColor: theme.surface, borderTopColor: theme.border },
+        ]}
+      >
         <TextInput
-          style={styles.composerInput}
-          placeholder="Write a message..."
+          style={[
+            styles.composerInput,
+            { backgroundColor: theme.surface, borderColor: theme.border },
+          ]}
+          placeholder={t('writeMessage')}
           placeholderTextColor={BECHO_COLORS.textMuted}
           value={draft}
           onChangeText={setDraft}
@@ -289,9 +358,13 @@ export default function ChatThreadScreen() {
           maxLength={500}
         />
         <TouchableOpacity
-          style={[styles.sendBtn, (!draft.trim() || sending) && { opacity: 0.5 }]}
+          style={[
+            styles.sendBtn,
+            { backgroundColor: theme.primary },
+            (!draft.trim() || sending) && { opacity: 0.5 },
+          ]}
           onPress={handleSend}
-          disabled={!draft.trim() || sending}
+          disabled={!draft.trim() || sending || isSelfChat}
         >
           {sending ? (
             <ActivityIndicator size="small" color="#052E16" />
@@ -342,6 +415,20 @@ const styles = StyleSheet.create({
   },
   headerTitle: { color: BECHO_COLORS.text, fontSize: 16, fontWeight: '700' },
   headerSub: { color: BECHO_COLORS.primary, fontSize: 11, fontWeight: '600', marginTop: 1 },
+  safetyNotice: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginHorizontal: 12,
+    marginTop: 10,
+    marginBottom: 8,
+    padding: 10,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(251,191,36,0.2)',
+    backgroundColor: 'rgba(251,191,36,0.08)',
+  },
+  safetyNoticeText: { flex: 1, color: '#fde68a', fontSize: 11, lineHeight: 16 },
   messageList: { padding: 14, paddingBottom: 24, gap: 10 },
   bubbleRow: { flexDirection: 'row' },
   rowMine: { justifyContent: 'flex-end' },
@@ -373,6 +460,15 @@ const styles = StyleSheet.create({
     fontSize: 13,
     textAlign: 'center',
     marginTop: 4,
+  },
+  sendError: {
+    color: '#fecaca',
+    backgroundColor: 'rgba(248,113,113,0.12)',
+    borderRadius: 12,
+    marginHorizontal: 12,
+    marginBottom: 8,
+    padding: 10,
+    fontSize: 12,
   },
   composer: {
     flexDirection: 'row',

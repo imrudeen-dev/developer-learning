@@ -1,72 +1,82 @@
-# Becho — Local Buy, Sell & Rent Marketplace App
+# Becho Marketplace
 
-**Becho** is a full-stack OLX-style mobile marketplace built with **React Native (Expo Router)** and **Supabase**. Users can list items for **sale (`SELL`)** or **rent (`RENT`)** with multi-photo uploads, GPS locality detection, category & price filtering, real-time buyer–seller messaging, and full ad lifecycle management.
+Becho is a mobile-first local marketplace built with Expo, React Native, TypeScript, and Supabase. Users can discover, sell, rent, and negotiate local listings.
 
-## Core Features
+## Features
 
-- **Authentication & Seller Profiles:** Email/password auth powered by Supabase Auth with automatic `profiles` provisioning via Postgres triggers and editable city/contact details.
-- **Dual Marketplace (`BUY` & `RENT`):**
-  - **Sell Ads:** Fixed-price listings across 10 categories (`Mobiles`, `Electronics`, `Vehicles`, `Property`, `Furniture`, `Bikes`, `Appliances`, `Fashion`, `Books & Sports`, `Tools & Gear`).
-  - **Rent Ads:** Flexible billing periods (`Per Day`, `Per Week`, `Per Month`) with optional refundable security deposits.
-- **Multi-Photo Upload & GPS Locality:** Upload up to 5 gallery photos per listing (`base64-arraybuffer` -> Supabase Storage `listing-images`) and auto-fill city/area using `expo-location` reverse geocoding.
-- **Discovery Feed & Search:** Two-column marketplace feed with `All` / `Buy` / `Rent` mode filters, category chips, keyword search, pull-to-refresh, and multi-photo detail carousel.
-- **Real-Time Buyer ↔ Seller Chat:** Live 1-on-1 listing threads powered by Supabase Realtime (`postgres_changes` on `public.messages`) plus a unified inbox grouped by listing and counterparty.
-- **My Ads Lifecycle Management:** Sellers can mark items as `SOLD` or `RENTED`, relist them as `ACTIVE`, or delete listings along with their stored images.
+- Email/password authentication and editable seller profiles.
+- Live marketplace feed with icon-led category tiles, search, city/price/seller-verification filters, sort options, sale/rent modes, saved listings, and separate popular/recommended/recently-sold sections.
+- Multi-photo listing creation with optional GPS-based locality.
+- Listing details with seller contact preferences, likes, views, ratings, and chat or offer actions.
+- Realtime chat, live listing activity counts, in-app notifications, and native push notification support for configured iOS/Android builds.
+- Buyer and seller activity for saved items, offers, deals, completed sales, reviews, and relisting; listing management includes active/archive search and live view/like totals.
+- Seller analytics and verification requests.
+- Three selectable dark accent themes and English/Tamil localization for primary navigation and key screens.
+- First launch opens an interactive self-guided tour with shortcuts to Explore, My activity, Chats, Create, and Profile; it supports back/next navigation and English/Tamil copy.
+- Shared responsive app shell: one header on mobile and web, a mobile navigation drawer and bottom navigation, and a persistent desktop sidebar with a desktop footer.
+- Owner-only controls for maintenance, feature availability, and seller verification.
+- Chat includes buyer-safety guidance and optional, foreground-only live location sharing with the selected chat partner.
+- Database-enforced access policies and marketplace actions through Supabase.
 
 ## Tech Stack
 
 | Layer | Technology |
 |---|---|
-| **Mobile Framework** | React Native, Expo SDK, Expo Router (file-based navigation) |
-| **Language** | TypeScript |
-| **Backend & Auth** | Supabase (PostgreSQL, Row Level Security, Auth) |
-| **Storage & Realtime** | Supabase Storage (`listing-images`), Supabase Realtime channels |
-| **Device APIs** | `expo-image-picker`, `expo-location`, `@react-native-async-storage/async-storage` |
-
-## Project Structure
-
-```text
-becho/
-├── src/
-│   ├── app/
-│   │   ├── _layout.tsx              # Root Stack + AuthProvider
-│   │   ├── (tabs)/
-│   │   │   ├── _layout.tsx          # 4-Tab Navigator (Home, Post Ad, Chats, Profile)
-│   │   │   ├── index.tsx            # Marketplace Feed (All/Buy/Rent, Search, Categories)
-│   │   │   ├── post.tsx             # Post Ad (SELL/RENT, Photos, GPS Location)
-│   │   │   ├── chats.tsx            # Buyer/Seller Conversations Inbox
-│   │   │   └── profile.tsx          # Auth, Seller Profile & My Ads Management
-│   │   ├── listing/[id].tsx         # Listing Detail + Photo Carousel + Chat CTA
-│   │   └── chat/[listingId].tsx     # Real-Time 1-on-1 Chat Thread
-│   └── lib/
-│       ├── auth-context.tsx         # Global Session & UserProfile Provider
-│       ├── constants.ts             # Categories & Rental Billing Periods
-│       ├── listings.ts              # Listing Types, INR & Relative Time Formatters
-│       ├── supabase.ts              # SSR-Safe Supabase Client
-│       └── theme.ts                 # Dark Slate & Emerald Design Tokens
-├── .env                             # Local environment secrets (Git-ignored)
-└── package.json
-```
+| Mobile framework | React Native, Expo SDK 52, Expo Router |
+| Language and styling | TypeScript, NativeWind, Tailwind CSS |
+| Backend and auth | Supabase PostgreSQL, Auth, Row Level Security |
+| Storage and realtime | Supabase Storage, Realtime channels |
+| Device APIs | `expo-image-picker`, `expo-location` |
 
 ## Local Setup
 
-### 1. Prerequisites
-- Node.js 18+ and npm
-- Expo Go app installed on Android or iOS
+1. Install Node.js 18+ and npm.
+2. Create a `.env` file in the project root:
 
-### 2. Environment Variables
-Create a `.env` file in the `becho/` root directory:
+   ```env
+   EXPO_PUBLIC_SUPABASE_URL=https://your-project-id.supabase.co
+   EXPO_PUBLIC_SUPABASE_ANON_KEY=your-supabase-publishable-or-anon-key
+   ```
 
-```env
-EXPO_PUBLIC_SUPABASE_URL=https://your-project-id.supabase.co
-EXPO_PUBLIC_SUPABASE_ANON_KEY=your-supabase-publishable-or-anon-key
-```
+3. Install dependencies and start Expo:
 
-### 3. Install & Run
+   ```bash
+   npm install
+   npx expo start
+   ```
+
+## Supabase Setup
+
+For a completely new Supabase project, run these files once, in order, from the Supabase SQL Editor:
+
+1. [`supabase/fresh_schema.sql`](./supabase/fresh_schema.sql) creates the core profiles, listings, messages, image storage bucket, and chat realtime setup.
+2. [`supabase/migrations/20261124_marketplace_features.sql`](./supabase/migrations/20261124_marketplace_features.sql) adds saved items, offers, deals, reviews, notifications, seller verification, and owner controls.
+3. [`supabase/migrations/20261124_owner_tools_announcements.sql`](./supabase/migrations/20261124_owner_tools_announcements.sql) grants trusted platform owners listing moderation access and adds realtime marketplace announcements.
+4. [`supabase/migrations/20261124_notifications_realtime.sql`](./supabase/migrations/20261124_notifications_realtime.sql) enables realtime notifications and listing activity counts, adds deal notifications, and creates the device push-token table.
+5. [`supabase/migrations/20261124_live_location_authorization.sql`](./supabase/migrations/20261124_live_location_authorization.sql) restricts private, ephemeral location broadcasts to the listing seller and the other chat participant.
+
+These are intended for a new, empty project. Do not rerun them after a successful run. To add marketplace features to an existing project, apply only the feature migration after verifying its base `profiles`, `listings`, and `messages` columns match the app.
+
+If the earlier scripts are already applied to `becho-dev`, apply only the specific migration for the capability you need. For private location sharing, run `20261124_live_location_authorization.sql` and turn off **Allow public access** in Supabase Realtime settings; private channels cannot protect location broadcasts while public channel access remains enabled.
+
+Platform-owner access is granted only through trusted Supabase Auth `app_metadata` with the role `platform_owner`. Set that role from a secure server-side admin workflow; never expose a service-role key in the mobile app.
+
+## Native Push Notifications
+
+The browser preview supports live in-app updates, but operating-system push alerts require an installed iOS/Android app on a physical device.
+
+1. Deploy `supabase/functions/send-push-notification` and set a private `PUSH_WEBHOOK_SECRET` with Supabase Functions secrets. The Supabase function runtime supplies `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY`; never put the service-role key in the app.
+2. In Supabase Database Webhooks, create an `INSERT` webhook for `public.notifications` that calls the deployed `send-push-notification` function. Add an `x-becho-webhook-secret` header with the same secret.
+3. Link the app to an Expo project so `extra.eas.projectId` is available, configure the Expo push credentials for APNs and FCM, and build/install an iOS or Android development build.
+4. Sign in on the device and enable **Profile → Device push alerts**.
+
+Push delivery has not been activated until those project credentials and the database webhook are configured. The app does not send push requests directly from the client.
+
+## Checks
 
 ```bash
-npm install
-npx expo start --tunnel
+npx expo lint
+npx tsc --noEmit
+npx expo install --check
+npx expo-doctor
 ```
-
-Scan the QR code with **Expo Go** to launch the app on your device.

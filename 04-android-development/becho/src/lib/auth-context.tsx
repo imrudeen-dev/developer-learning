@@ -32,12 +32,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   const fetchProfile = async (userId: string) => {
-    const { data } = await supabase
-      .from('profiles')
-      .select('id, full_name, phone, city, avatar_url')
-      .eq('id', userId)
-      .single();
-    if (data) setProfile(data);
+    const [profileResult, phoneResult] = await Promise.all([
+      supabase
+        .from('profiles')
+        .select('id, full_name, city, avatar_url')
+        .eq('id', userId)
+        .single(),
+      supabase.rpc('get_my_phone'),
+    ]);
+    if (profileResult.error) throw profileResult.error;
+    if (phoneResult.error) throw phoneResult.error;
+    setProfile({ ...profileResult.data, phone: phoneResult.data });
   };
 
   const refreshProfile = async () => {
@@ -47,25 +52,46 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session: currentSession } }) => {
-      setSession(currentSession);
-      if (currentSession?.user) {
-        fetchProfile(currentSession.user.id).finally(() => setLoading(false));
-      } else {
-        setLoading(false);
-      }
-    });
-
+    let active = true;
+    let authEventVersion = 0;
     const { data: listener } = supabase.auth.onAuthStateChange((_event, newSession) => {
+      authEventVersion += 1;
       setSession(newSession);
       if (newSession?.user) {
-        fetchProfile(newSession.user.id);
+        void fetchProfile(newSession.user.id).catch((error: unknown) => {
+          console.error('[Becho] Failed to load profile after auth change:', error);
+        });
       } else {
         setProfile(null);
       }
     });
 
+    const initialVersion = authEventVersion;
+    void supabase.auth
+      .getSession()
+      .then(async ({ data: { session: currentSession }, error }) => {
+        if (error) throw error;
+        if (!active || authEventVersion !== initialVersion) return;
+        setSession(currentSession);
+        if (currentSession?.user) {
+          try {
+            await fetchProfile(currentSession.user.id);
+          } catch (profileError) {
+            console.error('[Becho] Failed to load current profile:', profileError);
+          }
+        } else {
+          setProfile(null);
+        }
+      })
+      .catch((error: unknown) => {
+        console.error('[Becho] Failed to restore the current session:', error);
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+
     return () => {
+      active = false;
       listener.subscription.unsubscribe();
     };
   }, []);
@@ -86,3 +112,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 }
 
 export const useAuth = () => useContext(AuthContext);
+
+export function isPlatformOwner(user: User | null): boolean {
+  return user?.app_metadata?.role === 'platform_owner';
+}

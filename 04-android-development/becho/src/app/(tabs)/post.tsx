@@ -2,8 +2,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { decode } from 'base64-arraybuffer';
 import * as ImagePicker from 'expo-image-picker';
 import * as Location from 'expo-location';
-import { useRouter } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -11,14 +11,13 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
-import { useAuth } from '../../lib/auth-context';
+import { AppText as Text, AppTextInput as TextInput } from '../../components/app-text';
+import { isPlatformOwner, useAuth } from '../../lib/auth-context';
 import { BECHO_CATEGORIES, RENT_PERIODS } from '../../lib/constants';
+import { usePlatformSettings } from '../../lib/platform-settings';
 import { supabase } from '../../lib/supabase';
 import { BECHO_COLORS } from '../../lib/theme';
 
@@ -28,41 +27,56 @@ interface SelectedPhoto {
   mimeType: string;
 }
 
-export default function PostAdScreen() {
-  const { user, profile } = useAuth();
-  const router = useRouter();
+const steps = ['Details', 'Photos & location', 'Review'];
 
-  const [listingType, setListingType] = useState<'SELL' | 'RENT'>('SELL');
-  const [category, setCategory] = useState<string>(BECHO_CATEGORIES[0]);
-  const [title, setTitle] = useState('');
+export default function PostListingScreen() {
+  const router = useRouter();
+  const { user, profile } = useAuth();
+  const { settings } = usePlatformSettings();
+  const params = useLocalSearchParams<{
+    type?: string;
+    title?: string;
+    price?: string;
+    category?: string;
+  }>();
+  const [step, setStep] = useState(0);
+  const [listingType, setListingType] = useState<'SELL' | 'RENT'>(
+    params.type === 'RENT' ? 'RENT' : 'SELL'
+  );
+  const [category, setCategory] = useState<string>(
+    BECHO_CATEGORIES.includes(params.category as (typeof BECHO_CATEGORIES)[number])
+      ? (params.category as string)
+      : BECHO_CATEGORIES[0]
+  );
+  const [title, setTitle] = useState(params.title ?? '');
   const [description, setDescription] = useState('');
-  const [price, setPrice] = useState('');
+  const [price, setPrice] = useState(params.price ?? '');
   const [rentPeriod, setRentPeriod] = useState<'DAY' | 'WEEK' | 'MONTH'>('DAY');
   const [securityDeposit, setSecurityDeposit] = useState('');
-
-  const [city, setCity] = useState('Chennai');
+  const [city, setCity] = useState(profile?.city ?? 'Chennai');
   const [locality, setLocality] = useState('');
-  const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null);
-  const [locating, setLocating] = useState(false);
-
+  const [coordinates, setCoordinates] = useState<{ latitude: number; longitude: number } | null>(null);
   const [photos, setPhotos] = useState<SelectedPhoto[]>([]);
+  const [locating, setLocating] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
-    if (profile?.city) {
-      setCity(profile.city);
-    }
+    if (profile?.city) setCity(profile.city);
   }, [profile?.city]);
 
-  const handlePickPhotos = async () => {
+  useEffect(() => {
+    if (!settings.rentals_enabled && listingType === 'RENT') setListingType('SELL');
+  }, [settings.rentals_enabled, listingType]);
+
+  const pickPhotos = async () => {
     if (photos.length >= 5) {
-      Alert.alert('Photo limit reached', 'You can upload up to 5 photos per ad.');
+      Alert.alert('Photo limit reached', 'Add up to five photos to show your item clearly.');
       return;
     }
 
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!permission.granted) {
-      Alert.alert('Permission needed', 'Allow photo library access to upload item photos.');
+      Alert.alert('Photo access needed', 'Allow photo library access to add listing photos.');
       return;
     }
 
@@ -70,145 +84,171 @@ export default function PostAdScreen() {
       mediaTypes: ['images'],
       allowsMultipleSelection: true,
       selectionLimit: 5 - photos.length,
-      quality: 0.7,
+      quality: 0.75,
       base64: true,
     });
 
     if (!result.canceled) {
-      const picked: SelectedPhoto[] = result.assets
-        .filter((asset) => Boolean(asset.base64))
+      const selected = result.assets
+        .filter((asset): asset is typeof asset & { base64: string } => Boolean(asset.base64))
         .map((asset) => ({
           uri: asset.uri,
-          base64: asset.base64!,
+          base64: asset.base64,
           mimeType: asset.mimeType || 'image/jpeg',
         }));
-
-      setPhotos((prev) => [...prev, ...picked].slice(0, 5));
+      setPhotos((current) => [...current, ...selected].slice(0, 5));
     }
   };
 
-  const removePhoto = (index: number) => {
-    setPhotos((prev) => prev.filter((_, idx) => idx !== index));
-  };
-
-  const handleDetectLocation = async () => {
+  const detectLocation = async () => {
     setLocating(true);
     try {
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== 'granted') {
-        Alert.alert('Location denied', 'You can still enter your city and area manually.');
+      const permission = await Location.requestForegroundPermissionsAsync();
+      if (permission.status !== 'granted') {
+        Alert.alert('Location not shared', 'You can enter your city and neighborhood manually.');
         return;
       }
 
-      const pos = await Location.getCurrentPositionAsync({
+      const position = await Location.getCurrentPositionAsync({
         accuracy: Location.Accuracy.Balanced,
       });
-
-      setCoords({
-        lat: pos.coords.latitude,
-        lng: pos.coords.longitude,
+      setCoordinates({
+        latitude: position.coords.latitude,
+        longitude: position.coords.longitude,
       });
 
       const [place] = await Location.reverseGeocodeAsync({
-        latitude: pos.coords.latitude,
-        longitude: pos.coords.longitude,
+        latitude: position.coords.latitude,
+        longitude: position.coords.longitude,
       });
-
       if (place) {
-        if (place.city || place.subregion) {
-          setCity(place.city || place.subregion || city);
-        }
-        const area = place.district || place.name || place.street;
-        if (area) {
-          setLocality(area);
-        }
+        setCity(place.city || place.subregion || city);
+        setLocality(place.district || place.name || place.street || '');
       }
-    } catch (err: any) {
-      Alert.alert('Location Error', err.message ?? 'Could not detect current location');
+    } catch (locationError) {
+      console.error('[Becho] Could not detect listing location:', locationError);
+      Alert.alert('Location unavailable', 'Enter your city and neighborhood manually.');
     } finally {
       setLocating(false);
     }
   };
 
-  const uploadAllPhotos = async (userId: string): Promise<string[]> => {
-    const publicUrls: string[] = [];
-
-    for (let i = 0; i < photos.length; i++) {
-      const photo = photos[i];
-      const ext = photo.mimeType.includes('png') ? 'png' : 'jpg';
-      const filePath = `${userId}/${Date.now()}_${i}.${ext}`;
-
-      const { error: uploadError } = await supabase.storage
-        .from('listing-images')
-        .upload(filePath, decode(photo.base64), {
-          contentType: photo.mimeType,
-          upsert: false,
-        });
-
-      if (uploadError) throw uploadError;
-
-      const { data } = supabase.storage.from('listing-images').getPublicUrl(filePath);
-      publicUrls.push(data.publicUrl);
+  const validateStep = () => {
+    if (step === 0) {
+      const numericPrice = Number(price);
+      if (title.trim().length < 4) {
+        Alert.alert('Add a clear title', 'Use at least four characters to describe your item.');
+        return false;
+      }
+      if (!Number.isFinite(numericPrice) || numericPrice <= 0) {
+        Alert.alert('Check the price', 'Enter an amount greater than zero.');
+        return false;
+      }
     }
-
-    return publicUrls;
+    if (step === 1 && !city.trim()) {
+      Alert.alert('Add a location', 'Enter the city where the item is available.');
+      return false;
+    }
+    if (step === 0 && listingType === 'RENT' && securityDeposit.trim()) {
+      const deposit = Number(securityDeposit);
+      if (!Number.isFinite(deposit) || deposit < 0) {
+        Alert.alert('Check the deposit', 'Enter a valid refundable deposit amount.');
+        return false;
+      }
+    }
+    return true;
   };
 
-  const handlePublishAd = async () => {
-    if (!user) return;
-
-    const numericPrice = Number(price);
-    if (!title.trim()) {
-      Alert.alert('Missing Title', 'Enter a clear title for your item.');
+  const publishListing = async () => {
+    if (!user || submitting) return;
+    if (!settings.allow_listings && !isPlatformOwner(user)) {
+      Alert.alert('Listings paused', 'The platform is not accepting new listings right now.');
       return;
     }
-    if (Number.isNaN(numericPrice) || numericPrice <= 0) {
-      Alert.alert('Invalid Price', 'Enter a valid amount greater than 0.');
+    if (listingType === 'RENT' && !settings.rentals_enabled) {
+      Alert.alert('Rentals paused', 'The platform is not accepting rental listings right now.');
       return;
     }
-    if (!city.trim()) {
-      Alert.alert('Missing City', 'Enter the city where the item is located.');
+    if (!city.trim() || !title.trim() || !Number.isFinite(Number(price)) || Number(price) <= 0) {
+      Alert.alert('Listing needs attention', 'Check the title, price, and city before publishing.');
+      setStep(0);
       return;
     }
 
     setSubmitting(true);
+    const uploadedPaths: string[] = [];
     try {
-      const uploadedUrls = photos.length > 0 ? await uploadAllPhotos(user.id) : [];
+      if (settings.require_verified_sellers) {
+        const { data: verification, error: verificationError } = await supabase
+          .from('verified_sellers')
+          .select('status')
+          .eq('user_id', user.id)
+          .maybeSingle();
+        if (verificationError) throw verificationError;
+        if (verification?.status !== 'verified' && !isPlatformOwner(user)) {
+          Alert.alert(
+            'Seller verification required',
+            'Complete seller verification before publishing while this platform requirement is enabled.'
+          );
+          return;
+        }
+      }
 
-      const { error } = await supabase.from('listings').insert({
-        seller_id: user.id,
-        title: title.trim(),
-        description: description.trim() || null,
-        listing_type: listingType,
-        category,
-        price: numericPrice,
-        rent_period: listingType === 'RENT' ? rentPeriod : null,
-        security_deposit:
-          listingType === 'RENT' && securityDeposit.trim()
-            ? Number(securityDeposit) || 0
-            : 0,
-        city: city.trim(),
-        locality: locality.trim() || null,
-        latitude: coords?.lat ?? null,
-        longitude: coords?.lng ?? null,
-        images: uploadedUrls,
-        status: 'ACTIVE',
-      });
+      const imageUrls: string[] = [];
+      for (const [index, photo] of photos.entries()) {
+        const extension = photo.mimeType.includes('png') ? 'png' : 'jpg';
+        const path = `${user.id}/${Date.now()}_${index}.${extension}`;
+        const { error: uploadError } = await supabase.storage
+          .from('listing-images')
+          .upload(path, decode(photo.base64), {
+            contentType: photo.mimeType,
+            upsert: false,
+          });
+        if (uploadError) throw uploadError;
+        uploadedPaths.push(path);
+        imageUrls.push(supabase.storage.from('listing-images').getPublicUrl(path).data.publicUrl);
+      }
+
+      const { data, error } = await supabase
+        .from('listings')
+        .insert({
+          seller_id: user.id,
+          title: title.trim(),
+          description: description.trim() || null,
+          listing_type: listingType,
+          category,
+          price: Number(price),
+          rent_period: listingType === 'RENT' ? rentPeriod : null,
+          security_deposit:
+            listingType === 'RENT' && securityDeposit.trim()
+              ? Number(securityDeposit)
+              : 0,
+          city: city.trim(),
+          locality: locality.trim() || null,
+          latitude: coordinates?.latitude ?? null,
+          longitude: coordinates?.longitude ?? null,
+          images: imageUrls,
+          status: 'ACTIVE',
+        })
+        .select('id')
+        .single();
 
       if (error) throw error;
-
-      // Reset form
-      setTitle('');
-      setDescription('');
-      setPrice('');
-      setSecurityDeposit('');
-      setPhotos([]);
-
-      Alert.alert('Ad Published!', 'Your listing is now live on Becho.', [
-        { text: 'View Feed', onPress: () => router.replace('/(tabs)') },
-      ]);
-    } catch (err: any) {
-      Alert.alert('Failed to Post Ad', err.message ?? 'Something went wrong');
+      router.replace(`/listing/${data.id}`);
+    } catch (publishError) {
+      console.error('[Becho] Could not publish listing:', publishError);
+      if (uploadedPaths.length > 0) {
+        const { error: cleanupError } = await supabase.storage
+          .from('listing-images')
+          .remove(uploadedPaths);
+        if (cleanupError) {
+          console.error('[Becho] Could not clean up uploaded listing photos:', cleanupError);
+        }
+      }
+      Alert.alert(
+        'Could not publish listing',
+        publishError instanceof Error ? publishError.message : 'Please try again in a moment.'
+      );
     } finally {
       setSubmitting(false);
     }
@@ -216,441 +256,302 @@ export default function PostAdScreen() {
 
   if (!user) {
     return (
-      <View style={styles.authGate}>
-        <View style={styles.gateIcon}>
-          <Ionicons name="add-circle-outline" size={40} color={BECHO_COLORS.primary} />
+      <View className="flex-1 items-center justify-center bg-[#0b0f19] px-8">
+        <View className="h-16 w-16 items-center justify-center rounded-2xl bg-emerald-500/15">
+          <Ionicons name="storefront-outline" size={30} color={BECHO_COLORS.primary} />
         </View>
-        <Text style={styles.gateTitle}>Sign in to Post an Ad</Text>
-        <Text style={styles.gateSub}>
-          List items for sale or rent in seconds and chat directly with local buyers.
+        <Text className="mt-5 text-xl font-bold text-white">Sell or rent with Becho</Text>
+        <Text className="mt-2 text-center text-sm leading-5 text-gray-400">
+          Sign in to publish a listing and talk directly with local buyers.
         </Text>
         <TouchableOpacity
-          style={styles.primaryBtn}
           onPress={() => router.push('/(tabs)/profile')}
+          className="mt-6 rounded-xl bg-emerald-500 px-6 py-3"
         >
-          <Text style={styles.primaryBtnText}>Go to Sign In</Text>
+          <Text className="font-bold text-[#052e16]">Sign in</Text>
         </TouchableOpacity>
+      </View>
+    );
+  }
+
+  if (!settings.allow_listings && !isPlatformOwner(user)) {
+    return (
+      <View className="flex-1 items-center justify-center bg-[#0b0f19] px-8">
+        <Ionicons name="pause-circle-outline" size={40} color={BECHO_COLORS.textMuted} />
+        <Text className="mt-4 text-lg font-bold text-white">New listings are paused</Text>
+        <Text className="mt-2 text-center text-sm leading-5 text-gray-400">
+          You can still browse the marketplace. Check back soon to list an item.
+        </Text>
       </View>
     );
   }
 
   return (
     <KeyboardAvoidingView
-      style={{ flex: 1, backgroundColor: BECHO_COLORS.bg }}
+      className="flex-1 bg-[#0b0f19]"
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
-      <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
-        {/* 1. LISTING TYPE TOGGLE (SELL vs RENT) */}
-        <Text style={styles.sectionLabel}>What would you like to do?</Text>
-        <View style={styles.toggleRow}>
-          <TouchableOpacity
-            style={[
-              styles.toggleChip,
-              listingType === 'SELL' && styles.toggleChipSellActive,
-            ]}
-            onPress={() => setListingType('SELL')}
-          >
-            <Ionicons
-              name="pricetag-outline"
-              size={18}
-              color={listingType === 'SELL' ? '#052E16' : BECHO_COLORS.text}
-            />
-            <Text
-              style={[
-                styles.toggleText,
-                listingType === 'SELL' && styles.toggleTextActive,
-              ]}
-            >
-              Sell Item
-            </Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[
-              styles.toggleChip,
-              listingType === 'RENT' && styles.toggleChipRentActive,
-            ]}
-            onPress={() => setListingType('RENT')}
-          >
-            <Ionicons
-              name="repeat-outline"
-              size={18}
-              color={listingType === 'RENT' ? '#042F2E' : BECHO_COLORS.text}
-            />
-            <Text
-              style={[
-                styles.toggleText,
-                listingType === 'RENT' && styles.toggleTextActive,
-              ]}
-            >
-              Rent Out
-            </Text>
-          </TouchableOpacity>
+      <ScrollView
+        contentContainerStyle={{ paddingHorizontal: 18, paddingTop: 16, paddingBottom: 36 }}
+        keyboardShouldPersistTaps="handled"
+      >
+        <View className="mb-5 flex-row items-center justify-between">
+          <View>
+            <Text className="text-2xl font-extrabold text-white">Create a listing</Text>
+            <Text className="mt-1 text-sm text-gray-400">A few details help buyers decide.</Text>
+          </View>
+          <View className="rounded-full bg-[#1f2937] px-3 py-2">
+            <Text className="text-xs font-semibold text-gray-300">{step + 1} of 3</Text>
+          </View>
         </View>
 
-        {/* 2. PHOTOS PICKER */}
-        <View style={styles.rowBetween}>
-          <Text style={styles.sectionLabel}>Photos ({photos.length}/5)</Text>
-          <Text style={styles.helperText}>First photo becomes cover</Text>
-        </View>
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.photoRow}
-        >
-          {photos.length < 5 && (
-            <TouchableOpacity style={styles.addPhotoBox} onPress={handlePickPhotos}>
-              <Ionicons name="camera-outline" size={28} color={BECHO_COLORS.primary} />
-              <Text style={styles.addPhotoText}>Add Photos</Text>
-            </TouchableOpacity>
-          )}
-
-          {photos.map((photo, index) => (
-            <View key={photo.uri + index} style={styles.photoPreviewWrap}>
-              <Image source={{ uri: photo.uri }} style={styles.photoPreview} />
-              <TouchableOpacity
-                style={styles.removePhotoBtn}
-                onPress={() => removePhoto(index)}
-              >
-                <Ionicons name="close" size={14} color="#FFF" />
-              </TouchableOpacity>
+        <View className="mb-6 flex-row">
+          {steps.map((label, index) => (
+            <View key={label} className="mr-2 flex-1">
+              <View className={`h-1 rounded-full ${index <= step ? 'bg-emerald-500' : 'bg-[#1f2937]'}`} />
+              <Text className={`mt-2 text-[10px] ${index === step ? 'text-emerald-300' : 'text-gray-500'}`}>
+                {label}
+              </Text>
             </View>
           ))}
-        </ScrollView>
-
-        {/* 3. CATEGORY CHIPS */}
-        <Text style={styles.sectionLabel}>Category</Text>
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.chipRow}
-        >
-          {BECHO_CATEGORIES.map((cat) => {
-            const active = category === cat;
-            return (
-              <TouchableOpacity
-                key={cat}
-                style={[styles.categoryChip, active && styles.categoryChipActive]}
-                onPress={() => setCategory(cat)}
-              >
-                <Text style={[styles.categoryText, active && styles.categoryTextActive]}>
-                  {cat}
-                </Text>
-              </TouchableOpacity>
-            );
-          })}
-        </ScrollView>
-
-        {/* 4. TITLE & DESCRIPTION */}
-        <View style={styles.fieldGroup}>
-          <Text style={styles.label}>Ad Title *</Text>
-          <TextInput
-            style={styles.input}
-            placeholder={
-              listingType === 'SELL'
-                ? 'e.g. iPhone 15 Pro 256GB - Mint Condition'
-                : 'e.g. Sony A7 III Mirrorless Camera Kit for Rent'
-            }
-            placeholderTextColor={BECHO_COLORS.textMuted}
-            value={title}
-            onChangeText={setTitle}
-            maxLength={90}
-          />
         </View>
 
-        <View style={styles.fieldGroup}>
-          <Text style={styles.label}>Description</Text>
-          <TextInput
-            style={[styles.input, styles.textArea]}
-            placeholder="Include condition, age, accessories included, or rental terms..."
-            placeholderTextColor={BECHO_COLORS.textMuted}
-            value={description}
-            onChangeText={setDescription}
-            multiline
-            numberOfLines={4}
-            textAlignVertical="top"
-          />
-        </View>
+        {step === 0 && (
+          <View className="rounded-2xl border border-white/10 bg-[#111827] p-4">
+            <Text className="mb-2 text-sm font-bold text-white">What are you listing?</Text>
+            <View className="mb-5 flex-row rounded-xl bg-[#1f2937] p-1">
+              {([
+                ['SELL', 'Sell'],
+                ...(settings.rentals_enabled ? [['RENT', 'Rent'] as const] : []),
+              ] as const).map(([type, label]) => (
+                <TouchableOpacity
+                  key={type}
+                  onPress={() => setListingType(type)}
+                  className={`mr-1 flex-1 items-center rounded-lg py-2.5 ${
+                    listingType === type ? 'bg-emerald-500' : ''
+                  }`}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: listingType === type }}
+                >
+                  <Text className={`text-sm font-bold ${listingType === type ? 'text-[#052e16]' : 'text-gray-300'}`}>
+                    {label}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
 
-        {/* 5. PRICING (ADAPTS TO SELL vs RENT) */}
-        <View style={styles.fieldGroup}>
-          <Text style={styles.label}>
-            {listingType === 'SELL' ? 'Selling Price (₹) *' : 'Rent Rate (₹) *'}
-          </Text>
-          <TextInput
-            style={styles.input}
-            placeholder={listingType === 'SELL' ? 'e.g. 45000' : 'e.g. 1200'}
-            placeholderTextColor={BECHO_COLORS.textMuted}
-            keyboardType="numeric"
-            value={price}
-            onChangeText={setPrice}
-          />
-        </View>
+            <Text className="mb-2 text-xs font-semibold text-gray-300">Category</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} className="mb-4">
+              {BECHO_CATEGORIES.map((item) => (
+                <TouchableOpacity
+                  key={item}
+                  onPress={() => setCategory(item)}
+                  className={`mr-2 rounded-full border px-3 py-2 ${
+                    category === item ? 'border-emerald-500 bg-emerald-500/15' : 'border-white/10'
+                  }`}
+                >
+                  <Text className={`text-xs ${category === item ? 'text-emerald-300' : 'text-gray-400'}`}>
+                    {item}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
 
-        {listingType === 'RENT' && (
-          <>
-            <View style={styles.fieldGroup}>
-              <Text style={styles.label}>Billing Period</Text>
-              <View style={styles.periodRow}>
-                {RENT_PERIODS.map((p) => {
-                  const active = rentPeriod === p.value;
-                  return (
+            <Text className="mb-2 text-xs font-semibold text-gray-300">Title</Text>
+            <TextInput
+              value={title}
+              onChangeText={setTitle}
+              placeholder="Example: iPhone 15 Pro, excellent condition"
+              placeholderTextColor={BECHO_COLORS.textMuted}
+              maxLength={90}
+              className="mb-4 rounded-xl border border-white/10 bg-[#1f2937] px-3 py-3 text-white"
+              accessibilityLabel="Listing title"
+            />
+            <Text className="mb-2 text-xs font-semibold text-gray-300">Description</Text>
+            <TextInput
+              value={description}
+              onChangeText={setDescription}
+              placeholder="Condition, age, included accessories, or rental terms…"
+              placeholderTextColor={BECHO_COLORS.textMuted}
+              multiline
+              maxLength={1200}
+              textAlignVertical="top"
+              className="mb-4 min-h-28 rounded-xl border border-white/10 bg-[#1f2937] px-3 py-3 text-white"
+              accessibilityLabel="Listing description"
+            />
+            <Text className="mb-2 text-xs font-semibold text-gray-300">
+              {listingType === 'SELL' ? 'Price (₹)' : 'Rent per period (₹)'}
+            </Text>
+            <TextInput
+              value={price}
+              onChangeText={setPrice}
+              placeholder="0"
+              placeholderTextColor={BECHO_COLORS.textMuted}
+              keyboardType="decimal-pad"
+              className="rounded-xl border border-white/10 bg-[#1f2937] px-3 py-3 text-white"
+              accessibilityLabel="Price"
+            />
+            {listingType === 'RENT' && (
+              <>
+                <Text className="mb-2 mt-4 text-xs font-semibold text-gray-300">Billing period</Text>
+                <View className="flex-row">
+                  {RENT_PERIODS.map((period) => (
                     <TouchableOpacity
-                      key={p.value}
-                      style={[styles.periodChip, active && styles.periodChipActive]}
-                      onPress={() => setRentPeriod(p.value)}
+                      key={period.value}
+                      onPress={() => setRentPeriod(period.value)}
+                      className={`mr-2 rounded-full border px-3 py-2 ${
+                        rentPeriod === period.value
+                          ? 'border-sky-400 bg-sky-400/15'
+                          : 'border-white/10'
+                      }`}
                     >
-                      <Text style={[styles.periodText, active && styles.periodTextActive]}>
-                        {p.label}
+                      <Text className={`text-xs ${rentPeriod === period.value ? 'text-sky-300' : 'text-gray-400'}`}>
+                        {period.label}
                       </Text>
                     </TouchableOpacity>
-                  );
-                })}
-              </View>
-            </View>
-
-            <View style={styles.fieldGroup}>
-              <Text style={styles.label}>Refundable Security Deposit (₹) (optional)</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="e.g. 3000"
-                placeholderTextColor={BECHO_COLORS.textMuted}
-                keyboardType="numeric"
-                value={securityDeposit}
-                onChangeText={setSecurityDeposit}
-              />
-            </View>
-          </>
-        )}
-
-        {/* 6. LOCATION */}
-        <View style={styles.rowBetween}>
-          <Text style={styles.sectionLabel}>Location</Text>
-          <TouchableOpacity
-            style={styles.gpsBtn}
-            onPress={handleDetectLocation}
-            disabled={locating}
-          >
-            {locating ? (
-              <ActivityIndicator size="small" color={BECHO_COLORS.primary} />
-            ) : (
-              <>
-                <Ionicons name="locate-outline" size={16} color={BECHO_COLORS.primary} />
-                <Text style={styles.gpsBtnText}>Use Current GPS</Text>
+                  ))}
+                </View>
+                <Text className="mb-2 mt-4 text-xs font-semibold text-gray-300">Security deposit (optional)</Text>
+                <TextInput
+                  value={securityDeposit}
+                  onChangeText={setSecurityDeposit}
+                  placeholder="0"
+                  placeholderTextColor={BECHO_COLORS.textMuted}
+                  keyboardType="decimal-pad"
+                  className="rounded-xl border border-white/10 bg-[#1f2937] px-3 py-3 text-white"
+                  accessibilityLabel="Security deposit"
+                />
               </>
             )}
-          </TouchableOpacity>
-        </View>
+          </View>
+        )}
 
-        <View style={styles.locationRow}>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.label}>City *</Text>
+        {step === 1 && (
+          <View className="rounded-2xl border border-white/10 bg-[#111827] p-4">
+            <View className="mb-2 flex-row items-center justify-between">
+              <Text className="text-sm font-bold text-white">Photos</Text>
+              <Text className="text-xs text-gray-500">{photos.length}/5</Text>
+            </View>
+            <Text className="mb-3 text-xs leading-5 text-gray-400">
+              Add clear photos from different angles. The first photo is the cover.
+            </Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} className="mb-6">
+              <TouchableOpacity
+                onPress={() => void pickPhotos()}
+                className="mr-3 h-24 w-24 items-center justify-center rounded-xl border border-dashed border-emerald-500/50 bg-emerald-500/5"
+              >
+                <Ionicons name="camera-outline" size={24} color={BECHO_COLORS.primary} />
+                <Text className="mt-1 text-[10px] font-semibold text-emerald-300">Add photos</Text>
+              </TouchableOpacity>
+              {photos.map((photo, index) => (
+                <View key={`${photo.uri}-${index}`} className="mr-3 h-24 w-24 overflow-hidden rounded-xl">
+                  <Image source={{ uri: photo.uri }} className="h-full w-full" resizeMode="cover" />
+                  <TouchableOpacity
+                    onPress={() => setPhotos((current) => current.filter((_, i) => i !== index))}
+                    className="absolute right-1 top-1 h-6 w-6 items-center justify-center rounded-full bg-black/70"
+                    accessibilityLabel="Remove photo"
+                  >
+                    <Ionicons name="close" size={14} color="white" />
+                  </TouchableOpacity>
+                </View>
+              ))}
+            </ScrollView>
+
+            <View className="mb-2 flex-row items-center justify-between">
+              <Text className="text-sm font-bold text-white">Pickup location</Text>
+              <TouchableOpacity
+                onPress={() => void detectLocation()}
+                disabled={locating}
+                className="flex-row items-center rounded-full bg-emerald-500/10 px-3 py-2"
+              >
+                {locating ? (
+                  <ActivityIndicator size="small" color={BECHO_COLORS.primary} />
+                ) : (
+                  <>
+                    <Ionicons name="locate-outline" size={15} color={BECHO_COLORS.primary} />
+                    <Text className="ml-1 text-xs font-semibold text-emerald-300">Use GPS</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+            </View>
             <TextInput
-              style={styles.input}
               value={city}
               onChangeText={setCity}
-              placeholder="Chennai"
+              placeholder="City"
               placeholderTextColor={BECHO_COLORS.textMuted}
+              className="mb-3 rounded-xl border border-white/10 bg-[#1f2937] px-3 py-3 text-white"
+              accessibilityLabel="City"
             />
-          </View>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.label}>Neighborhood / Area</Text>
             <TextInput
-              style={styles.input}
               value={locality}
               onChangeText={setLocality}
-              placeholder="e.g. Adyar, Anna Nagar"
+              placeholder="Neighborhood or area"
               placeholderTextColor={BECHO_COLORS.textMuted}
+              className="rounded-xl border border-white/10 bg-[#1f2937] px-3 py-3 text-white"
+              accessibilityLabel="Neighborhood"
             />
           </View>
-        </View>
+        )}
 
-        {/* SUBMIT BUTTON */}
-        <TouchableOpacity
-          style={[styles.publishBtn, submitting && { opacity: 0.7 }]}
-          onPress={handlePublishAd}
-          disabled={submitting}
-        >
-          {submitting ? (
-            <ActivityIndicator color="#052E16" />
-          ) : (
-            <>
-              <Ionicons name="checkmark-circle-outline" size={20} color="#052E16" />
-              <Text style={styles.publishBtnText}>
-                {listingType === 'SELL' ? 'Publish Sale Ad' : 'Publish Rental Ad'}
+        {step === 2 && (
+          <View className="rounded-2xl border border-white/10 bg-[#111827] p-4">
+            <Text className="text-base font-bold text-white">Ready to publish?</Text>
+            <Text className="mb-4 mt-1 text-sm text-gray-400">
+              Check your details before your listing goes live.
+            </Text>
+            {photos[0] && (
+              <Image source={{ uri: photos[0].uri }} className="mb-4 h-48 w-full rounded-xl" resizeMode="cover" />
+            )}
+            <Text className="text-lg font-extrabold text-emerald-400">
+              ₹{Number(price || 0).toLocaleString('en-IN')}
+              {listingType === 'RENT' ? ` / ${rentPeriod.toLowerCase()}` : ''}
+            </Text>
+            <Text className="mt-1 text-base font-bold text-white">{title || 'Your listing title'}</Text>
+            <Text className="mt-2 text-xs text-gray-400">{category} · {city || 'Add city'}</Text>
+            <Text className="mt-3 text-sm leading-5 text-gray-300">
+              {description || 'No description added.'}
+            </Text>
+            <View className="mt-4 flex-row items-center rounded-xl bg-emerald-500/10 p-3">
+              <Ionicons name="shield-checkmark-outline" size={17} color={BECHO_COLORS.primary} />
+              <Text className="ml-2 flex-1 text-xs leading-4 text-emerald-200">
+                Keep conversations and payments on trusted channels. Never share verification codes.
               </Text>
-            </>
+            </View>
+          </View>
+        )}
+
+        <View className="mt-5 flex-row">
+          {step > 0 && (
+            <TouchableOpacity
+              onPress={() => setStep((current) => current - 1)}
+              className="mr-3 flex-1 items-center rounded-xl border border-white/15 py-3.5"
+            >
+              <Text className="font-semibold text-gray-300">Back</Text>
+            </TouchableOpacity>
           )}
-        </TouchableOpacity>
+          {step < 2 ? (
+            <TouchableOpacity
+              onPress={() => {
+                if (validateStep()) setStep((current) => current + 1);
+              }}
+              className="flex-1 items-center rounded-xl bg-emerald-500 py-3.5"
+            >
+              <Text className="font-bold text-[#052e16]">Continue</Text>
+            </TouchableOpacity>
+          ) : (
+            <TouchableOpacity
+              onPress={() => void publishListing()}
+              disabled={submitting}
+              className="flex-1 flex-row items-center justify-center rounded-xl bg-emerald-500 py-3.5"
+            >
+              {submitting && <ActivityIndicator size="small" color="#052e16" />}
+              <Text className={`font-bold text-[#052e16] ${submitting ? 'ml-2' : ''}`}>
+                {submitting ? 'Publishing…' : 'Publish listing'}
+              </Text>
+            </TouchableOpacity>
+          )}
+        </View>
       </ScrollView>
     </KeyboardAvoidingView>
   );
 }
-
-const styles = StyleSheet.create({
-  container: { padding: 16, paddingBottom: 40 },
-  authGate: {
-    flex: 1,
-    backgroundColor: BECHO_COLORS.bg,
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 28,
-  },
-  gateIcon: {
-    width: 72,
-    height: 72,
-    borderRadius: 20,
-    backgroundColor: BECHO_COLORS.surface,
-    borderWidth: 1,
-    borderColor: BECHO_COLORS.border,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 16,
-  },
-  gateTitle: { color: BECHO_COLORS.text, fontSize: 22, fontWeight: '800' },
-  gateSub: {
-    color: BECHO_COLORS.textMuted,
-    fontSize: 14,
-    textAlign: 'center',
-    marginTop: 8,
-    marginBottom: 24,
-    lineHeight: 20,
-  },
-  primaryBtn: {
-    backgroundColor: BECHO_COLORS.primary,
-    paddingHorizontal: 28,
-    paddingVertical: 14,
-    borderRadius: 12,
-  },
-  primaryBtnText: { color: '#052E16', fontSize: 15, fontWeight: '800' },
-  sectionLabel: {
-    color: BECHO_COLORS.text,
-    fontSize: 15,
-    fontWeight: '700',
-    marginBottom: 10,
-  },
-  helperText: { color: BECHO_COLORS.textMuted, fontSize: 12 },
-  rowBetween: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginTop: 4,
-  },
-  toggleRow: { flexDirection: 'row', gap: 12, marginBottom: 18 },
-  toggleChip: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    paddingVertical: 13,
-    borderRadius: 12,
-    backgroundColor: BECHO_COLORS.surface,
-    borderWidth: 1,
-    borderColor: BECHO_COLORS.border,
-  },
-  toggleChipSellActive: {
-    backgroundColor: BECHO_COLORS.primary,
-    borderColor: BECHO_COLORS.primary,
-  },
-  toggleChipRentActive: {
-    backgroundColor: BECHO_COLORS.rentBadge,
-    borderColor: BECHO_COLORS.rentBadge,
-  },
-  toggleText: { color: BECHO_COLORS.text, fontSize: 15, fontWeight: '700' },
-  toggleTextActive: { color: '#052E16', fontWeight: '800' },
-  photoRow: { gap: 10, paddingBottom: 16 },
-  addPhotoBox: {
-    width: 96,
-    height: 96,
-    borderRadius: 14,
-    borderWidth: 1.5,
-    borderStyle: 'dashed',
-    borderColor: BECHO_COLORS.primary,
-    backgroundColor: BECHO_COLORS.surface,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 4,
-  },
-  addPhotoText: { color: BECHO_COLORS.primary, fontSize: 12, fontWeight: '700' },
-  photoPreviewWrap: { width: 96, height: 96, borderRadius: 14, overflow: 'hidden' },
-  photoPreview: { width: '100%', height: '100%' },
-  removePhotoBtn: {
-    position: 'absolute',
-    top: 6,
-    right: 6,
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    backgroundColor: 'rgba(0,0,0,0.75)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  chipRow: { gap: 8, paddingBottom: 18 },
-  categoryChip: {
-    paddingHorizontal: 14,
-    paddingVertical: 9,
-    borderRadius: 999,
-    backgroundColor: BECHO_COLORS.surface,
-    borderWidth: 1,
-    borderColor: BECHO_COLORS.border,
-  },
-  categoryChipActive: {
-    backgroundColor: BECHO_COLORS.primaryMuted,
-    borderColor: BECHO_COLORS.primary,
-  },
-  categoryText: { color: BECHO_COLORS.textMuted, fontSize: 13, fontWeight: '600' },
-  categoryTextActive: { color: BECHO_COLORS.primary, fontWeight: '700' },
-  fieldGroup: { marginBottom: 14 },
-  label: { color: BECHO_COLORS.textMuted, fontSize: 13, fontWeight: '600', marginBottom: 6 },
-  input: {
-    backgroundColor: BECHO_COLORS.surfaceElevated,
-    borderWidth: 1,
-    borderColor: BECHO_COLORS.border,
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    color: BECHO_COLORS.text,
-    fontSize: 15,
-  },
-  textArea: { minHeight: 96, paddingTop: 12 },
-  periodRow: { flexDirection: 'row', gap: 10 },
-  periodChip: {
-    flex: 1,
-    paddingVertical: 10,
-    borderRadius: 10,
-    backgroundColor: BECHO_COLORS.surface,
-    borderWidth: 1,
-    borderColor: BECHO_COLORS.border,
-    alignItems: 'center',
-  },
-  periodChipActive: {
-    backgroundColor: BECHO_COLORS.primaryMuted,
-    borderColor: BECHO_COLORS.primary,
-  },
-  periodText: { color: BECHO_COLORS.textMuted, fontSize: 13, fontWeight: '600' },
-  periodTextActive: { color: BECHO_COLORS.primary, fontWeight: '700' },
-  gpsBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 8,
-    backgroundColor: BECHO_COLORS.surfaceElevated,
-    borderWidth: 1,
-    borderColor: BECHO_COLORS.border,
-  },
-  gpsBtnText: { color: BECHO_COLORS.primary, fontSize: 12, fontWeight: '700' },
-  locationRow: { flexDirection: 'row', gap: 10, marginTop: 6, marginBottom: 22 },
-  publishBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    backgroundColor: BECHO_COLORS.primary,
-    borderRadius: 14,
-    paddingVertical: 15,
-  },
-  publishBtnText: { color: '#052E16', fontSize: 16, fontWeight: '800' },
-});
