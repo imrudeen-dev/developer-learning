@@ -2,7 +2,7 @@
   "expo": {
     "name": "Becho Enterprise",
     "slug": "becho",
-    "version": "2.0.0",
+    "version": "3.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "becho",
@@ -17,7 +17,9 @@
         "foregroundImage": "./assets/images/android-icon-foreground.png",
         "backgroundColor": "#0b0f19"
       },
-      "backgroundColor": "#0b0f19"
+      "backgroundColor": "#0b0f19",
+      "package": "com.imrudeen.becho",
+      "versionCode": 3
     },
     "plugins": [
       "expo-router",
@@ -48,6 +50,12 @@
     ],
     "experiments": {
       "typedRoutes": true
+    },
+    "owner": "imrudeen-studio",
+    "extra": {
+      "eas": {
+        "projectId": "d3f7e3b5-56c8-43b7-a0ef-d1a62f33f0a1"
+      }
     }
   }
 }
