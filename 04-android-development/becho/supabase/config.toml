@@ -1,2 +1,7 @@
+project_id = "becho"
+
+[db]
+major_version = 17
+
 [functions.send-push-notification]
 verify_jwt = false
