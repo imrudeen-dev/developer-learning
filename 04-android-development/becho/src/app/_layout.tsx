@@ -26,7 +26,7 @@ function PushNotificationObserver() {
 
   const handleResponse = useCallback(
     (response: Notifications.NotificationResponse) => {
-      const data = response.notification.request.content.data;
+      const data = response.notification.request.content.data ?? {};
       const listingId = typeof data.listing_id === 'string' ? data.listing_id : null;
       const actorId = typeof data.actor_id === 'string' ? data.actor_id : null;
       const notificationType =
@@ -121,7 +121,7 @@ function RootNavigator() {
     return (
       <>
         {Platform.OS !== 'web' && <PushNotificationObserver />}
-        <StatusBar style={theme.isLight ? 'dark' : 'light'} backgroundColor={theme.background} />
+        <StatusBar style={theme.isLight ? 'dark' : 'light'} />
         <View
           className="flex-1 items-center justify-center px-8"
           style={{ backgroundColor: theme.background }}
@@ -145,7 +145,7 @@ function RootNavigator() {
     <AppTourProvider>
       <>
       {Platform.OS !== 'web' && <PushNotificationObserver />}
-      <StatusBar style={theme.isLight ? 'dark' : 'light'} backgroundColor={theme.background} />
+      <StatusBar style={theme.isLight ? 'dark' : 'light'} />
       <View style={{ flex: 1, flexDirection: 'row', backgroundColor: theme.background }}>
         <LinearGradient
           colors={theme.backgroundGradient}

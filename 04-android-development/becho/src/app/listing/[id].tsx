@@ -3,21 +3,22 @@ import * as Location from 'expo-location';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import {
-    ActivityIndicator,
-    Alert,
-    Dimensions,
-    Image,
-    Linking,
-    Modal,
-    Share,
-    ScrollView,
-    StyleSheet,
-    TouchableOpacity,
-    View,
+  ActivityIndicator,
+  Alert,
+  Dimensions,
+  Image,
+  Linking,
+  Modal,
+  ScrollView,
+  Share,
+  StyleSheet,
+  TouchableOpacity,
+  View,
 } from 'react-native';
 import { AppText as Text, AppTextInput as TextInput } from '../../components/app-text';
-import { useAuth } from '../../lib/auth-context';
 import { useAppPreferences } from '../../lib/app-preferences';
+import { useAuth } from '../../lib/auth-context';
+import { formatINR, formatListingPrice, formatTimeAgo, Listing } from '../../lib/listings';
 import {
   getListingMetrics,
   ListingMetrics,
@@ -25,10 +26,11 @@ import {
   setListingLiked,
   setListingSaved,
 } from '../../lib/marketplace';
-import { Listing, formatINR, formatListingPrice, formatTimeAgo } from '../../lib/listings';
-import { supabase } from '../../lib/supabase';
 import { usePlatformSettings } from '../../lib/platform-settings';
+import { uniqueChannelTopic } from '../../lib/realtime';
+import { supabase } from '../../lib/supabase';
 import { BECHO_COLORS } from '../../lib/theme';
+
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
 
@@ -197,7 +199,7 @@ export default function ListingDetailScreen() {
 
     let refreshTimer: ReturnType<typeof setTimeout> | undefined;
     const channel = supabase
-      .channel(`listing-activity-detail:${id}`)
+      .channel(uniqueChannelTopic(`listing-activity-detail:${id}`))
       .on(
         'postgres_changes',
         {

@@ -1,11 +1,12 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useRouter } from 'expo-router';
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, FlatList, RefreshControl, TouchableOpacity, View } from 'react-native';
 import { AppText as Text } from '../../components/app-text';
-import { useAuth } from '../../lib/auth-context';
 import { useAppPreferences } from '../../lib/app-preferences';
+import { useAuth } from '../../lib/auth-context';
 import { formatTimeAgo } from '../../lib/listings';
+import { uniqueChannelTopic } from '../../lib/realtime';
 import { supabase } from '../../lib/supabase';
 
 interface ThreadSummary {
@@ -106,7 +107,7 @@ export default function ChatsScreen() {
   useEffect(() => {
     if (!user) return;
     const channel = supabase
-      .channel(`inbox:${user.id}`)
+      .channel(uniqueChannelTopic(`inbox:${user.id}`))
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, (payload) => {
         const message = payload.new as { sender_id?: string; receiver_id?: string };
         if (message.sender_id === user.id || message.receiver_id === user.id) {

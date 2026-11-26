@@ -2,19 +2,20 @@ import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
-    ActivityIndicator,
-    FlatList,
-    KeyboardAvoidingView,
-    Platform,
-    StyleSheet,
-    TouchableOpacity,
-    View,
+  ActivityIndicator,
+  FlatList,
+  KeyboardAvoidingView,
+  Platform,
+  StyleSheet,
+  TouchableOpacity,
+  View,
 } from 'react-native';
 import { AppText as Text, AppTextInput as TextInput } from '../../components/app-text';
 import { ChatLocationSharing } from '../../components/chat-location-sharing';
-import { useAuth } from '../../lib/auth-context';
 import { useAppPreferences } from '../../lib/app-preferences';
+import { useAuth } from '../../lib/auth-context';
 import { formatTimeAgo } from '../../lib/listings';
+import { uniqueChannelTopic } from '../../lib/realtime';
 import { supabase } from '../../lib/supabase';
 import { BECHO_COLORS } from '../../lib/theme';
 
@@ -130,7 +131,7 @@ export default function ChatThreadScreen() {
     if (!listingId || !user) return;
 
     const channel = supabase
-      .channel(`chat:${listingId}:${user.id}`)
+      .channel(uniqueChannelTopic(`chat:${listingId}:${user.id}`))
       .on(
         'postgres_changes',
         {

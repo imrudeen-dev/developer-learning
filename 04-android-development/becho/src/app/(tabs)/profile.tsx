@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useRouter } from 'expo-router';
-import React, { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -12,16 +12,16 @@ import {
   View,
 } from 'react-native';
 import { AppText as Text, AppTextInput as TextInput } from '../../components/app-text';
-import { isPlatformOwner, useAuth } from '../../lib/auth-context';
+import { NotificationBell } from '../../components/notification-bell';
 import { APP_THEMES, useAppPreferences, type AppThemeId, type TranslationKey } from '../../lib/app-preferences';
+import { isPlatformOwner, useAuth } from '../../lib/auth-context';
 import { getListingMetrics } from '../../lib/marketplace';
 import { useNotificationCenter } from '../../lib/notification-center';
-import { supabase } from '../../lib/supabase';
-import { NotificationBell } from '../../components/notification-bell';
-import { registerPushToken, unregisterPushToken } from '../../lib/push-notifications';
 import type { PushRegistrationResult } from '../../lib/push-notifications';
-import { TourTarget, useAppTour } from '../../lib/tour-context';
+import { registerPushToken, unregisterPushToken } from '../../lib/push-notifications';
+import { supabase } from '../../lib/supabase';
 import { BECHO_COLORS } from '../../lib/theme';
+import { TourTarget, useAppTour } from '../../lib/tour-context';
 
 interface SellerSettings {
   public_profile: boolean;
@@ -200,7 +200,7 @@ export default function ProfileScreen() {
         if (active) setPushStatus(result);
       })
       .catch((pushError: unknown) => {
-        console.error('[Becho] Could not sync device push token:', pushError);
+        console.warn('[Becho] Could not sync device push token:', pushError);
         if (active) setPushMessage('Device notifications need push setup for this Expo project.');
       });
     return () => {
@@ -322,6 +322,10 @@ export default function ProfileScreen() {
         setPushMessage('Allow notifications in your device settings to receive alerts.');
       } else if (result === 'physical_device_required') {
         setPushMessage('Remote push notifications require a physical iOS or Android device.');
+      } else if (result === 'expo_go_unsupported') {
+        setPushMessage(
+          'Push alerts do not work in Expo Go on Android. Install a development build (eas build --profile development) to test them.'
+        );
       } else if (result === 'unsupported_platform') {
         setPushMessage('Install Becho on iOS or Android to enable device push alerts.');
       } else {

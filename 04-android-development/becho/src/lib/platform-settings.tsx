@@ -1,4 +1,5 @@
 import React, { createContext, useCallback, useContext, useEffect, useState } from 'react';
+import { uniqueChannelTopic } from '../lib/realtime';
 import { supabase } from './supabase';
 
 export interface PlatformSettings {
@@ -66,7 +67,7 @@ export function PlatformSettingsProvider({ children }: { children: React.ReactNo
   useEffect(() => {
     void refresh();
     const channel = supabase
-      .channel('platform-settings')
+      .channel(uniqueChannelTopic('platform-settings'))
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'platform_feature_flags' },

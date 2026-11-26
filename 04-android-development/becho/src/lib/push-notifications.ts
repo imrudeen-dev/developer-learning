@@ -1,24 +1,33 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import Constants from 'expo-constants';
+import Constants, { ExecutionEnvironment } from 'expo-constants';
 import * as Device from 'expo-device';
 import * as Notifications from 'expo-notifications';
+import { AndroidImportance } from 'expo-notifications';
 import { Platform } from 'react-native';
 import { supabase } from './supabase';
 
 const PUSH_TOKEN_STORAGE_KEY = 'becho_push_token_v1';
 
-Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowAlert: true,
-    shouldPlaySound: true,
-    shouldSetBadge: true,
-  }),
-});
+// Expo Go (Android) no longer supports remote push / notification channels.
+// Push only works in a development build or a production build.
+const isExpoGo = Constants.executionEnvironment === ExecutionEnvironment.StoreClient;
+
+if (!(isExpoGo && Platform.OS === 'android')) {
+  Notifications.setNotificationHandler({
+    handleNotification: async () => ({
+      shouldShowBanner: true,
+      shouldShowList: true,
+      shouldPlaySound: true,
+      shouldSetBadge: true,
+    }),
+  });
+}
 
 export type PushRegistrationResult =
   | 'registered'
   | 'permission_required'
   | 'physical_device_required'
+  | 'expo_go_unsupported'
   | 'unsupported_platform';
 
 export async function registerPushToken(
@@ -27,14 +36,21 @@ export async function registerPushToken(
 ): Promise<PushRegistrationResult> {
   if (Platform.OS !== 'ios' && Platform.OS !== 'android') return 'unsupported_platform';
   if (!Device.isDevice) return 'physical_device_required';
+  if (isExpoGo && Platform.OS === 'android') return 'expo_go_unsupported';
 
   if (Platform.OS === 'android') {
-    await Notifications.setNotificationChannelAsync('default', {
-      name: 'Becho updates',
-      importance: Notifications.AndroidImportance.DEFAULT,
-      vibrationPattern: [0, 250, 250, 250],
-      lightColor: '#22c55e',
-    });
+    try {
+      await Notifications.setNotificationChannelAsync('default', {
+        name: 'Becho updates',
+        importance: AndroidImportance.DEFAULT,
+        vibrationPattern: [0, 250, 250, 250],
+        lightColor: '#22c55e',
+      });
+    } catch (channelError) {
+      // Channel creation must not block token registration; the plugin's
+      // `defaultChannel` in app.json already provides a fallback channel.
+      console.warn('[Becho] Could not create Android notification channel:', channelError);
+    }
   }
 
   let { status } = await Notifications.getPermissionsAsync();

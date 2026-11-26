@@ -1,12 +1,13 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useRouter } from 'expo-router';
-import React, { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, FlatList, TouchableOpacity, View } from 'react-native';
 import { AppText as Text } from '../components/app-text';
-import { useAuth } from '../lib/auth-context';
 import { useAppPreferences } from '../lib/app-preferences';
+import { useAuth } from '../lib/auth-context';
 import { formatTimeAgo } from '../lib/listings';
 import { useNotificationCenter } from '../lib/notification-center';
+import { uniqueChannelTopic } from '../lib/realtime';
 import { supabase } from '../lib/supabase';
 
 interface AppNotification {
@@ -67,7 +68,7 @@ export default function NotificationsScreen() {
 
     let refreshTimer: ReturnType<typeof setTimeout> | undefined;
     const channel = supabase
-      .channel(`notifications-screen:${user.id}`)
+      .channel(uniqueChannelTopic(`notifications-screen:${user.id}`))
       .on(
         'postgres_changes',
         {
@@ -288,7 +289,7 @@ export default function NotificationsScreen() {
               <View className="mb-3 rounded-xl border border-amber-400/20 bg-amber-400/10 p-3">
                 <Text className="text-xs text-amber-200">{errorMessage}</Text>
               </View>
-            ) : null
+            ) : undefined
           }
         />
       )}

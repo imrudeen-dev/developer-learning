@@ -22,7 +22,7 @@ Becho is a mobile-first local marketplace built with Expo, React Native, TypeScr
 
 | Layer | Technology |
 |---|---|
-| Mobile framework | React Native, Expo SDK 52, Expo Router |
+| Mobile framework | React Native, Expo SDK 58, Expo Router |
 | Language and styling | TypeScript, NativeWind, Tailwind CSS |
 | Backend and auth | Supabase PostgreSQL, Auth, Row Level Security |
 | Storage and realtime | Supabase Storage, Realtime channels |
@@ -30,7 +30,7 @@ Becho is a mobile-first local marketplace built with Expo, React Native, TypeScr
 
 ## Local Setup
 
-1. Install Node.js 18+ and npm.
+1. Install Node.js 22.13+ and npm.
 2. Create a `.env` file in the project root:
 
    ```env
@@ -71,6 +71,8 @@ The browser preview supports live in-app updates, but operating-system push aler
 4. Sign in on the device and enable **Profile → Device push alerts**.
 
 Push delivery has not been activated until those project credentials and the database webhook are configured. The app does not send push requests directly from the client.
+
+Remote push notifications are not supported in Expo Go on Android; use a development build to test push alerts. Other app features can still be tested in Expo Go.
 
 ## Checks
 

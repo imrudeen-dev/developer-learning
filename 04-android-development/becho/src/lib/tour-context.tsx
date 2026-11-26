@@ -145,7 +145,7 @@ interface TourTargetProps {
 }
 
 export function TourTarget({ id, children, className, style }: TourTargetProps) {
-  const ref = useRef<View>(null);
+  const ref = useRef<React.ElementRef<typeof View>>(null);
   const { activeTargetId, registerTarget } = useAppTour();
 
   const measureTarget = useCallback(() => {
@@ -181,7 +181,10 @@ export function AppTourProvider({ children }: { children: React.ReactNode }) {
   const [step, setStep] = useState(0);
   const [targetRects, setTargetRects] = useState<Partial<Record<TourTargetId, TargetRect>>>({});
   const pathRef = useRef(pathname);
-  pathRef.current = pathname;
+
+  useEffect(() => {
+    pathRef.current = pathname;
+  }, [pathname]);
 
   const registerTarget = useCallback((id: TourTargetId, rect: TargetRect) => {
     setTargetRects((current) => {
