@@ -45,3 +45,5 @@ example
 supabase/.temp/
 supabase/.branches/
 supabase/snippets/
+.env.*
+!.env.example
