@@ -1,19 +1,34 @@
+import { LinearGradient } from 'expo-linear-gradient';
+import * as Notifications from 'expo-notifications';
 import { Stack, useRouter } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
-import * as Notifications from 'expo-notifications';
 import { StatusBar } from 'expo-status-bar';
-import { LinearGradient } from 'expo-linear-gradient';
 import { useCallback, useEffect, useRef } from 'react';
-import { ActivityIndicator, Image, Platform, View, useWindowDimensions } from 'react-native';
-import '../global.css';
+import { ActivityIndicator, Image, LogBox, Platform, View, useWindowDimensions } from 'react-native';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { AppFooter, AppHeader } from '../components/app-header';
 import { AppText as Text } from '../components/app-text';
 import { DesktopSidebar } from '../components/desktop-sidebar';
-import { AuthProvider, useAuth } from '../lib/auth-context';
+import '../global.css';
 import { AppPreferencesProvider, useAppPreferences } from '../lib/app-preferences';
-import { AppTourProvider } from '../lib/tour-context';
-import { PlatformSettingsProvider, usePlatformSettings } from '../lib/platform-settings';
+import { AuthProvider, useAuth } from '../lib/auth-context';
 import { NotificationCenterProvider } from '../lib/notification-center';
+import { PlatformSettingsProvider, usePlatformSettings } from '../lib/platform-settings';
+import { AppTourProvider } from '../lib/tour-context';
+
+
+// Expected limitations (Expo Go push, RLS denials) must not freeze the UI with red boxes.
+LogBox.ignoreLogs([
+  'expo-notifications',
+  'Android Push notifications',
+  'was removed from Expo Go',
+  '[Becho] Could not enable device notifications',
+  '[Becho] Could not sync device push token',
+  '[Becho] Could not send chat message',
+  '[Becho] Could not publish listing',
+  '[Becho] Could not update account settings',
+  'new row violates row-level security',
+]);
 
 void SplashScreen.preventAutoHideAsync().catch((error: unknown) => {
   console.warn('[Becho] Could not keep the native splash screen visible:', error);
@@ -181,14 +196,16 @@ function RootNavigator() {
 
 export default function RootLayout() {
   return (
-    <AppPreferencesProvider>
-      <AuthProvider>
-        <NotificationCenterProvider>
-          <PlatformSettingsProvider>
-            <RootNavigator />
-          </PlatformSettingsProvider>
-        </NotificationCenterProvider>
-      </AuthProvider>
-    </AppPreferencesProvider>
+    <SafeAreaProvider>
+      <AppPreferencesProvider>
+        <AuthProvider>
+          <NotificationCenterProvider>
+            <PlatformSettingsProvider>
+              <RootNavigator />
+            </PlatformSettingsProvider>
+          </NotificationCenterProvider>
+        </AuthProvider>
+      </AppPreferencesProvider>
+    </SafeAreaProvider>
   );
 }

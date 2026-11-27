@@ -1,17 +1,17 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ActivityIndicator, ScrollView, TouchableOpacity, View } from 'react-native';
 import { AppText as Text, AppTextInput as TextInput } from '../components/app-text';
-import { TourTarget } from '../lib/tour-context';
-import { useAuth } from '../lib/auth-context';
 import {
   APP_THEMES,
-  type AppThemeId,
   useAppPreferences,
+  type AppThemeId,
   type TranslationKey,
 } from '../lib/app-preferences';
+import { useAuth } from '../lib/auth-context';
 import { supabase } from '../lib/supabase';
+import { TourTarget } from '../lib/tour-context';
 
 const THEME_OPTIONS: { id: AppThemeId; label: TranslationKey }[] = [
   { id: 'emerald', label: 'themeEmerald' },
@@ -48,20 +48,31 @@ export default function SettingsScreen() {
     setStatusMessage('');
     setErrorMessage('');
     try {
-      const { error } = await supabase
-        .from('profiles')
-        .update({
+      const { error } = await supabase.from('profiles').upsert(
+        {
+          id: user.id,
           full_name: name.trim(),
           phone: phone.trim() || null,
           city: city.trim() || null,
-        })
-        .eq('id', user.id);
+        },
+        { onConflict: 'id' }
+      );
       if (error) throw error;
       await refreshProfile();
       setStatusMessage(t('settingsSaved'));
     } catch (saveError) {
-      console.error('[Becho] Could not update account settings:', saveError);
-      setErrorMessage(t('settingsSaveError'));
+      console.warn('[Becho] Could not update account settings:', saveError);
+      const detail =
+        saveError && typeof saveError === 'object' && 'message' in saveError
+          ? String((saveError as { message?: string }).message)
+          : saveError instanceof Error
+            ? saveError.message
+            : '';
+      setErrorMessage(
+        detail
+          ? `${t('settingsSaveError')} (${detail})`
+          : t('settingsSaveError')
+      );
     } finally {
       setSaving(false);
     }

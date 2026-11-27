@@ -3,7 +3,7 @@ import { decode } from 'base64-arraybuffer';
 import * as ImagePicker from 'expo-image-picker';
 import * as Location from 'expo-location';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -236,7 +236,7 @@ export default function PostListingScreen() {
       if (error) throw error;
       router.replace(`/listing/${data.id}`);
     } catch (publishError) {
-      console.error('[Becho] Could not publish listing:', publishError);
+      console.warn('[Becho] Could not publish listing:', publishError);
       if (uploadedPaths.length > 0) {
         const { error: cleanupError } = await supabase.storage
           .from('listing-images')
@@ -245,9 +245,27 @@ export default function PostListingScreen() {
           console.error('[Becho] Could not clean up uploaded listing photos:', cleanupError);
         }
       }
+
+      const message =
+        publishError && typeof publishError === 'object' && 'message' in publishError
+          ? String((publishError as { message?: string }).message)
+          : publishError instanceof Error
+            ? publishError.message
+            : 'Please try again in a moment.';
+      const code =
+        publishError && typeof publishError === 'object' && 'code' in publishError
+          ? String((publishError as { code?: string }).code)
+          : '';
+      const hint =
+        /bucket|storage|not found|row-level security|permission|policy/i.test(message)
+          ? '\n\nCheck that the listing-images storage bucket exists and RLS policies allow upload/insert on the becho-dev project.'
+          : /jwt|auth|session/i.test(message)
+            ? '\n\nSign out and sign in again, then retry.'
+            : '';
+
       Alert.alert(
         'Could not publish listing',
-        publishError instanceof Error ? publishError.message : 'Please try again in a moment.'
+        code ? `${message} [${code}]${hint}` : `${message}${hint}`
       );
     } finally {
       setSubmitting(false);

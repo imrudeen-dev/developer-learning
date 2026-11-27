@@ -5,7 +5,7 @@ import React, {
   useEffect,
   useState,
 } from 'react';
-import { uniqueChannelTopic } from '../lib/realtime';
+import { cleanupChannel, subscribePostgresChanges } from '../lib/realtime';
 import { useAuth } from './auth-context';
 import { supabase } from './supabase';
 
@@ -55,28 +55,26 @@ export function NotificationCenterProvider({ children }: { children: React.React
 
     void refreshUnreadCount();
     let refreshTimer: ReturnType<typeof setTimeout> | undefined;
-    const channel = supabase
-      .channel(uniqueChannelTopic(`notification-count:${userId}`))
-      .on(
-        'postgres_changes',
-        {
+    const channel = subscribePostgresChanges(`notification-count:${userId}`, [
+      {
+        filter: {
           event: '*',
           schema: 'public',
           table: 'notifications',
           filter: `recipient_id=eq.${userId}`,
         },
-        () => {
+        callback: () => {
           if (refreshTimer) clearTimeout(refreshTimer);
           refreshTimer = setTimeout(() => {
             void refreshUnreadCount();
           }, 100);
-        }
-      )
-      .subscribe();
+        },
+      },
+    ]);
 
     return () => {
       if (refreshTimer) clearTimeout(refreshTimer);
-      void supabase.removeChannel(channel);
+      cleanupChannel(channel);
     };
   }, [userId, refreshUnreadCount]);
 

@@ -6,7 +6,7 @@ import { AppText as Text } from '../../components/app-text';
 import { useAppPreferences } from '../../lib/app-preferences';
 import { useAuth } from '../../lib/auth-context';
 import { formatTimeAgo } from '../../lib/listings';
-import { uniqueChannelTopic } from '../../lib/realtime';
+import { cleanupChannel, subscribePostgresChanges } from '../../lib/realtime';
 import { supabase } from '../../lib/supabase';
 
 interface ThreadSummary {
@@ -106,18 +106,21 @@ export default function ChatsScreen() {
 
   useEffect(() => {
     if (!user) return;
-    const channel = supabase
-      .channel(uniqueChannelTopic(`inbox:${user.id}`))
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, (payload) => {
-        const message = payload.new as { sender_id?: string; receiver_id?: string };
-        if (message.sender_id === user.id || message.receiver_id === user.id) {
-          void loadThreads(true);
-        }
-      })
-      .subscribe();
+
+    const channel = subscribePostgresChanges(`inbox:${user.id}`, [
+      {
+        filter: { event: 'INSERT', schema: 'public', table: 'messages' },
+        callback: (payload) => {
+          const message = payload.new as { sender_id?: string; receiver_id?: string };
+          if (message.sender_id === user.id || message.receiver_id === user.id) {
+            void loadThreads(true);
+          }
+        },
+      },
+    ]);
 
     return () => {
-      void supabase.removeChannel(channel);
+      cleanupChannel(channel);
     };
   }, [loadThreads, user]);
 

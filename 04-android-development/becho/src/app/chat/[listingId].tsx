@@ -3,6 +3,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   FlatList,
   KeyboardAvoidingView,
   Platform,
@@ -15,7 +16,7 @@ import { ChatLocationSharing } from '../../components/chat-location-sharing';
 import { useAppPreferences } from '../../lib/app-preferences';
 import { useAuth } from '../../lib/auth-context';
 import { formatTimeAgo } from '../../lib/listings';
-import { uniqueChannelTopic } from '../../lib/realtime';
+import { cleanupChannel, subscribePostgresChanges } from '../../lib/realtime';
 import { supabase } from '../../lib/supabase';
 import { BECHO_COLORS } from '../../lib/theme';
 
@@ -130,18 +131,16 @@ export default function ChatThreadScreen() {
   useEffect(() => {
     if (!listingId || !user) return;
 
-    const channel = supabase
-      .channel(uniqueChannelTopic(`chat:${listingId}:${user.id}`))
-      .on(
-        'postgres_changes',
-        {
+    const channel = subscribePostgresChanges(`chat:${listingId}:${user.id}`, [
+      {
+        filter: {
           event: 'INSERT',
           schema: 'public',
           table: 'messages',
           filter: `listing_id=eq.${listingId}`,
         },
-        (payload) => {
-          const incoming = payload.new as ChatMessage;
+        callback: (payload) => {
+          const incoming = payload.new as unknown as ChatMessage;
           const involvesMe =
             incoming.sender_id === user.id || incoming.receiver_id === user.id;
           if (!involvesMe) return;
@@ -158,12 +157,12 @@ export default function ChatThreadScreen() {
             if (prev.some((m) => m.id === incoming.id)) return prev;
             return [...prev, incoming];
           });
-        }
-      )
-      .subscribe();
+        },
+      },
+    ]);
 
     return () => {
-      supabase.removeChannel(channel);
+      cleanupChannel(channel);
     };
   }, [listingId, user, resolvedPeerId]);
 
@@ -186,6 +185,26 @@ export default function ChatThreadScreen() {
     setSendError('');
 
     try {
+      // Pre-check listing + roles so we can show a clear reason before RLS fails.
+      const { data: listingRow, error: listingError } = await supabase
+        .from('listings')
+        .select('id, seller_id, status, title')
+        .eq('id', listingId)
+        .maybeSingle();
+      if (listingError) throw listingError;
+      if (!listingRow) {
+        setSendError('This listing no longer exists.');
+        setDraft(text);
+        return;
+      }
+      if (listingRow.seller_id !== user.id && listingRow.seller_id !== resolvedPeerId) {
+        setSendError(
+          'Chat is only available between the buyer and the seller of this listing.'
+        );
+        setDraft(text);
+        return;
+      }
+
       const { data, error } = await supabase
         .from('messages')
         .insert({
@@ -206,7 +225,8 @@ export default function ChatThreadScreen() {
       }
     } catch (err: unknown) {
       setDraft(text);
-      console.error('[Becho] Could not send chat message:', err);
+      // Expected business / RLS failures must never crash the app or open LogBox.
+      console.warn('[Becho] Could not send chat message:', err);
       const errorMessage =
         err instanceof Error
           ? err.message
@@ -216,12 +236,20 @@ export default function ChatThreadScreen() {
               typeof err.message === 'string'
             ? err.message
             : t('sendMessageError');
-      setSendError(
+      const isRls =
         errorMessage.toLowerCase().includes('row-level security') ||
-          errorMessage.toLowerCase().includes('permission denied')
-          ? t('chatPermissionError')
-          : errorMessage
-      );
+        errorMessage.toLowerCase().includes('permission denied') ||
+        (typeof err === 'object' &&
+          err !== null &&
+          'code' in err &&
+          String((err as { code?: string }).code) === '42501');
+
+      const friendly = isRls
+        ? 'Chat is only available between the buyer and the seller while this listing is active. You can still browse, post, and use other features.'
+        : errorMessage;
+
+      setSendError(friendly);
+      Alert.alert('Could not send message', friendly, [{ text: 'OK' }]);
     } finally {
       setSending(false);
     }

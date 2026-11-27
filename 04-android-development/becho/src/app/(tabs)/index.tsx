@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useRouter } from 'expo-router';
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -15,10 +15,10 @@ import {
   View,
 } from 'react-native';
 import { AppText as Text, AppTextInput as TextInput } from '../../components/app-text';
-import { useAuth } from '../../lib/auth-context';
 import { useAppPreferences, type TranslationKey } from '../../lib/app-preferences';
+import { useAuth } from '../../lib/auth-context';
 import { BECHO_CATEGORIES } from '../../lib/constants';
-import { usePlatformSettings } from '../../lib/platform-settings';
+import { formatListingPrice, formatTimeAgo, Listing } from '../../lib/listings';
 import {
   getLikedListingIds,
   getListingMetrics,
@@ -27,7 +27,7 @@ import {
   setListingLiked,
   setListingSaved,
 } from '../../lib/marketplace';
-import { Listing, formatListingPrice, formatTimeAgo } from '../../lib/listings';
+import { usePlatformSettings } from '../../lib/platform-settings';
 import { supabase } from '../../lib/supabase';
 import { BECHO_COLORS } from '../../lib/theme';
 import { TourTarget } from '../../lib/tour-context';
@@ -247,7 +247,15 @@ export default function HomeScreen() {
         }
       } catch (loadError) {
         console.error('[Becho] Failed to load marketplace listings:', loadError);
-        setErrorMessage(t('listingsLoadError'));
+        const detail =
+          loadError && typeof loadError === 'object' && 'message' in loadError
+            ? String((loadError as { message?: string }).message)
+            : loadError instanceof Error
+              ? loadError.message
+              : '';
+        setErrorMessage(
+          detail ? `${t('listingsLoadError')} — ${detail}` : t('listingsLoadError')
+        );
       } finally {
         setLoading(false);
         setRefreshing(false);

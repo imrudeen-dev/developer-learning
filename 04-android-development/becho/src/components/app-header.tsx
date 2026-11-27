@@ -2,12 +2,13 @@ import { Ionicons } from '@expo/vector-icons';
 import { usePathname, useRouter } from 'expo-router';
 import React, { useState } from 'react';
 import { Modal, Platform, TouchableOpacity, View, useWindowDimensions } from 'react-native';
-import { AppText as Text } from './app-text';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAppPreferences } from '../lib/app-preferences';
 import { isPlatformOwner, useAuth } from '../lib/auth-context';
 import { useNotificationCenter } from '../lib/notification-center';
-import { TourTarget, useAppTour } from '../lib/tour-context';
 import { usePlatformSettings } from '../lib/platform-settings';
+import { TourTarget, useAppTour } from '../lib/tour-context';
+import { AppText as Text } from './app-text';
 
 const navigationItems = [
   { path: '/', translation: 'explore', icon: 'compass-outline' },
@@ -27,6 +28,7 @@ export function AppHeader() {
   const { unreadCount } = useNotificationCenter();
   const { startTour } = useAppTour();
   const [menuVisible, setMenuVisible] = useState(false);
+  const insets = useSafeAreaInsets();
   const canCreate = settings.allow_listings || isPlatformOwner(user);
   const showMenu = Platform.OS !== 'web' || width < 1024;
 
@@ -39,7 +41,11 @@ export function AppHeader() {
     <>
       <View
         className="flex-row items-center border-b px-3 py-2.5"
-        style={{ backgroundColor: theme.surface, borderColor: theme.border }}
+        style={{
+          backgroundColor: theme.surface,
+          borderColor: theme.border,
+          paddingTop: Math.max(insets.top, 0) + 10,
+        }}
       >
         {showMenu && (
           <TouchableOpacity
@@ -87,11 +93,12 @@ export function AppHeader() {
       >
         <View className="flex-1 flex-row bg-black/60">
           <View
-            className="h-full border-r px-4 pb-6 pt-5"
+            className="h-full border-r px-4 pb-6"
             style={{
               width: Math.min(width * 0.84, 320),
               backgroundColor: theme.surface,
               borderColor: theme.border,
+              paddingTop: Math.max(insets.top, 0) + 20,
             }}
           >
             <View className="mb-6 flex-row items-center justify-between">
@@ -208,6 +215,7 @@ export function AppFooter() {
   const { theme, t } = useAppPreferences();
   const { user } = useAuth();
   const { settings } = usePlatformSettings();
+  const insets = useSafeAreaInsets();
   const canCreate = settings.allow_listings || isPlatformOwner(user);
   const showMobileNavigation = Platform.OS !== 'web' || width < 1024;
 
@@ -215,7 +223,12 @@ export function AppFooter() {
     return (
       <View
         className="flex-row items-center justify-between border-t px-5"
-        style={{ minHeight: 38, backgroundColor: theme.surface, borderColor: theme.border }}
+        style={{
+          minHeight: 38 + (Platform.OS === 'web' ? 0 : Math.max(insets.bottom, 0)),
+          paddingBottom: Platform.OS === 'web' ? 0 : Math.max(insets.bottom, 0),
+          backgroundColor: theme.surface,
+          borderColor: theme.border,
+        }}
       >
         <Text className="text-[11px] font-semibold text-gray-300">{t('meetSafely')}</Text>
         <Text className="text-[10px] text-gray-500">{t('neighborhoodMarketplace')}</Text>
@@ -237,8 +250,8 @@ export function AppFooter() {
     <View
       className="flex-row items-center justify-around border-t px-1 pt-2"
       style={{
-        height: 66,
-        paddingBottom: 8,
+        paddingBottom: Math.max(insets.bottom, 8),
+        minHeight: 58 + Math.max(insets.bottom, 8),
         backgroundColor: theme.surface,
         borderColor: theme.border,
       }}

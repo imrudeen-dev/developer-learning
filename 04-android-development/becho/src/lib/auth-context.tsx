@@ -32,17 +32,45 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   const fetchProfile = async (userId: string) => {
-    const [profileResult, phoneResult] = await Promise.all([
-      supabase
+    let profileResult = await supabase
+      .from('profiles')
+      .select('id, full_name, city, avatar_url')
+      .eq('id', userId)
+      .maybeSingle();
+
+    // First sign-in / missing row: create a minimal profile so settings & listings work.
+    if (!profileResult.error && !profileResult.data) {
+      const { data: sessionData } = await supabase.auth.getUser();
+      const metaName =
+        (sessionData.user?.user_metadata?.full_name as string | undefined) ||
+        (sessionData.user?.email?.split('@')[0] ?? 'Becho member');
+      const upsert = await supabase
         .from('profiles')
+        .upsert(
+          {
+            id: userId,
+            full_name: metaName,
+          },
+          { onConflict: 'id' }
+        )
         .select('id, full_name, city, avatar_url')
-        .eq('id', userId)
-        .single(),
-      supabase.rpc('get_my_phone'),
-    ]);
+        .single();
+      if (upsert.error) throw upsert.error;
+      profileResult = upsert;
+    }
+
     if (profileResult.error) throw profileResult.error;
-    if (phoneResult.error) throw phoneResult.error;
-    setProfile({ ...profileResult.data, phone: phoneResult.data });
+
+    const phoneResult = await supabase.rpc('get_my_phone');
+    // Phone helper is optional — do not block the whole profile if RPC is missing.
+    if (phoneResult.error) {
+      console.warn('[Becho] get_my_phone unavailable:', phoneResult.error.message);
+    }
+
+    setProfile({
+      ...(profileResult.data as { id: string; full_name: string | null; city: string | null; avatar_url: string | null }),
+      phone: phoneResult.error ? null : phoneResult.data,
+    });
   };
 
   const refreshProfile = async () => {

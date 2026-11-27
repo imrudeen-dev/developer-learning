@@ -197,11 +197,28 @@ export default function ProfileScreen() {
     let active = true;
     void registerPushToken(userId, false)
       .then((result) => {
-        if (active) setPushStatus(result);
+        if (!active) return;
+        setPushStatus(result);
+        // Quiet auto-sync: only surface a message when setup is incomplete.
+        if (
+          result === 'firebase_not_configured' ||
+          result === 'setup_incomplete' ||
+          result === 'expo_go_unsupported'
+        ) {
+          setPushMessage(
+            result === 'expo_go_unsupported'
+              ? 'Push alerts need a development or production build (not Expo Go on Android).'
+              : result === 'firebase_not_configured'
+                ? 'Push native setup is pending for this build. App stays usable without alerts.'
+                : 'Push setup is incomplete for this Expo project.'
+          );
+        }
       })
       .catch((pushError: unknown) => {
         console.warn('[Becho] Could not sync device push token:', pushError);
-        if (active) setPushMessage('Device notifications need push setup for this Expo project.');
+        if (active) {
+          setPushMessage('Device notifications need push setup for this Expo project.');
+        }
       });
     return () => {
       active = false;
@@ -311,6 +328,27 @@ export default function ProfileScreen() {
     }
   };
 
+  const messageForPushResult = (result: typeof pushStatus) => {
+    switch (result) {
+      case 'registered':
+        return 'Push alerts are enabled for this device.';
+      case 'permission_required':
+        return 'Allow notifications in your device settings to receive alerts.';
+      case 'physical_device_required':
+        return 'Remote push notifications require a physical iOS or Android device.';
+      case 'expo_go_unsupported':
+        return 'Push alerts do not work in Expo Go on Android. Use a development or production build to test them.';
+      case 'unsupported_platform':
+        return 'Install Becho on iOS or Android to enable device push alerts.';
+      case 'firebase_not_configured':
+        return 'Push is not ready on this build yet. Add Android FCM credentials (google-services.json) for production APKs. Dev continues without crash.';
+      case 'setup_incomplete':
+        return 'Push setup is incomplete for this Expo project. Link EAS project ID and rebuild.';
+      default:
+        return '';
+    }
+  };
+
   const enablePushNotifications = async () => {
     if (!user) return;
     setPushBusy(true);
@@ -318,26 +356,25 @@ export default function ProfileScreen() {
     try {
       const result = await registerPushToken(user.id, true);
       setPushStatus(result);
-      if (result === 'permission_required') {
-        setPushMessage('Allow notifications in your device settings to receive alerts.');
-      } else if (result === 'physical_device_required') {
-        setPushMessage('Remote push notifications require a physical iOS or Android device.');
-      } else if (result === 'expo_go_unsupported') {
-        setPushMessage(
-          'Push alerts do not work in Expo Go on Android. Install a development build (eas build --profile development) to test them.'
-        );
-      } else if (result === 'unsupported_platform') {
-        setPushMessage('Install Becho on iOS or Android to enable device push alerts.');
-      } else {
-        setPushMessage('Push alerts are enabled for this device.');
-      }
+      setPushMessage(messageForPushResult(result));
     } catch (pushError) {
-      console.error('[Becho] Could not enable device notifications:', pushError);
-      setPushMessage(
+      const msg =
         pushError instanceof Error
           ? pushError.message
-          : 'Could not enable push alerts. Check the Expo and Supabase setup.'
-      );
+          : 'Could not enable push alerts. Check the Expo and Supabase setup.';
+      // Expected on Expo Go / missing FCM — warn only so LogBox does not show a red screen.
+      console.warn('[Becho] Could not enable device notifications:', pushError);
+      if (
+        msg.toLowerCase().includes('expo go') ||
+        msg.toLowerCase().includes('development build')
+      ) {
+        setPushStatus('expo_go_unsupported');
+        setPushMessage(
+          'Push alerts do not work in Expo Go on Android. Use a development or production build to test them.'
+        );
+      } else {
+        setPushMessage(msg);
+      }
     } finally {
       setPushBusy(false);
     }
