@@ -19,7 +19,7 @@
       },
       "backgroundColor": "#0b0f19",
       "package": "com.imrudeen.becho",
-      "versionCode": 3
+      "versionCode": 4
     },
     "plugins": [
       "expo-router",
