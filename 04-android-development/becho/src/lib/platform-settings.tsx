@@ -7,7 +7,6 @@ export interface PlatformSettings {
   allow_listings: boolean;
   chat_enabled: boolean;
   offers_enabled: boolean;
-  rentals_enabled: boolean;
   require_verified_sellers: boolean;
 }
 
@@ -23,7 +22,6 @@ const DEFAULT_SETTINGS: PlatformSettings = {
   allow_listings: true,
   chat_enabled: true,
   offers_enabled: true,
-  rentals_enabled: true,
   require_verified_sellers: false,
 };
 
@@ -52,7 +50,6 @@ export function PlatformSettingsProvider({ children }: { children: React.ReactNo
         allow_listings: values.get('allow_listings') !== false,
         chat_enabled: values.get('chat_enabled') !== false,
         offers_enabled: values.get('offers_enabled') !== false,
-        rentals_enabled: values.get('rentals_enabled') !== false,
         require_verified_sellers: values.get('require_verified_sellers') === true,
       });
       setError(null);

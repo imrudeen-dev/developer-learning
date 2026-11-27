@@ -26,7 +26,6 @@ const TOUR_KEY = 'becho_onboarding_v5';
 type TourRoute = '/' | '/chats' | '/orders' | '/profile' | '/settings' | '/(tabs)/post';
 type TourTargetId =
   | 'home-search'
-  | 'home-offer-type'
   | 'home-categories'
   | 'nav-explore'
   | 'nav-create'
@@ -59,13 +58,6 @@ const TOUR_STEPS: TourStep[] = [
     title: 'tourSearchTitle',
     description: 'tourSearchDescription',
     icon: 'search-outline',
-  },
-  {
-    targetId: 'home-offer-type',
-    route: '/',
-    title: 'tourOfferTitle',
-    description: 'tourOfferDescription',
-    icon: 'swap-horizontal-outline',
   },
   {
     targetId: 'home-categories',

@@ -18,7 +18,7 @@ import {
 import { AppText as Text, AppTextInput as TextInput } from '../../components/app-text';
 import { useAppPreferences } from '../../lib/app-preferences';
 import { useAuth } from '../../lib/auth-context';
-import { formatINR, formatListingPrice, formatTimeAgo, Listing } from '../../lib/listings';
+import { formatListingPrice, formatTimeAgo, Listing } from '../../lib/listings';
 import {
   getListingMetrics,
   ListingMetrics,
@@ -92,11 +92,8 @@ export default function ListingDetailScreen() {
           seller_id,
           title,
           description,
-          listing_type,
           category,
           price,
-          rent_period,
-          security_deposit,
           city,
           locality,
           latitude,
@@ -237,7 +234,6 @@ export default function ListingDetailScreen() {
   }
 
   const isOwner = user?.id === listing.seller_id;
-  const isRent = listing.listing_type === 'RENT';
   const locationLabel = [listing.locality, listing.city].filter(Boolean).join(', ');
   const sellerName = listing.profiles?.full_name || 'Becho Seller';
 
@@ -460,20 +456,15 @@ export default function ListingDetailScreen() {
         {/* MAIN DETAILS */}
         <View style={styles.body}>
           <View style={styles.tagRow}>
-            <View
-              style={[
-                styles.typeBadge,
-                { backgroundColor: isRent ? BECHO_COLORS.rentBadge : theme.primary },
-              ]}
-            >
-              <Text style={styles.typeBadgeText}>{isRent ? t('forRent').toUpperCase() : t('forSale').toUpperCase()}</Text>
+            <View style={[styles.typeBadge, { backgroundColor: theme.primary }]}>
+              <Text style={styles.typeBadgeText}>{t('forSale').toUpperCase()}</Text>
             </View>
             <View style={styles.catBadge}>
               <Text style={styles.catBadgeText}>{listing.category}</Text>
             </View>
             {listing.status !== 'ACTIVE' && (
               <View style={styles.soldBadge}>
-                <Text style={styles.soldBadgeText}>{listing.status === 'RENTED' ? t('rented').toUpperCase() : t('sold').toUpperCase()}</Text>
+                <Text style={styles.soldBadgeText}>{t('sold').toUpperCase()}</Text>
               </View>
             )}
             {metrics?.is_verified && (
@@ -485,12 +476,6 @@ export default function ListingDetailScreen() {
           </View>
 
           <Text style={[styles.price, { color: theme.primary }]}>{formatListingPrice(listing)}</Text>
-
-          {isRent && (listing.security_deposit ?? 0) > 0 && (
-            <Text style={styles.depositText}>
-              {t('securityDeposit')}: {formatINR(listing.security_deposit!)}
-            </Text>
-          )}
 
           <Text style={styles.title}>{listing.title}</Text>
 
@@ -759,7 +744,6 @@ const styles = StyleSheet.create({
   },
   catBadgeText: { color: BECHO_COLORS.textMuted, fontSize: 11, fontWeight: '700' },
   price: { color: BECHO_COLORS.primary, fontSize: 26, fontWeight: '900' },
-  depositText: { color: BECHO_COLORS.textMuted, fontSize: 13, marginTop: 4 },
   title: { color: BECHO_COLORS.text, fontSize: 19, fontWeight: '700', marginTop: 8, lineHeight: 25 },
   metaRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 10 },
   metaText: { color: BECHO_COLORS.textMuted, fontSize: 13 },

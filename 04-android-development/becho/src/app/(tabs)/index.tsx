@@ -32,7 +32,6 @@ import { supabase } from '../../lib/supabase';
 import { BECHO_COLORS } from '../../lib/theme';
 import { TourTarget } from '../../lib/tour-context';
 
-type TypeFilter = 'ALL' | 'SELL' | 'RENT';
 type ListingSort = 'newest' | 'price_asc' | 'price_desc';
 type ListingWithMetrics = Listing & { metrics?: ListingMetrics };
 
@@ -83,7 +82,6 @@ export default function HomeScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
   const [featureMessage, setFeatureMessage] = useState('');
-  const [typeFilter, setTypeFilter] = useState<TypeFilter>('ALL');
   const [selectedCategory, setSelectedCategory] = useState('All');
   const [searchQuery, setSearchQuery] = useState('');
   const [debouncedQuery, setDebouncedQuery] = useState('');
@@ -173,31 +171,31 @@ export default function HomeScreen() {
         let query = supabase
           .from('listings')
           .select(
-            `id, seller_id, title, description, listing_type, category, price, rent_period,
-             security_deposit, city, locality, latitude, longitude, images, status, created_at,
+            `id, seller_id, title, description, category, price,
+             city, locality, latitude, longitude, images, status, created_at,
              profiles:seller_id (full_name, city)`
           )
           .eq('status', 'ACTIVE')
+          .eq('listing_type', 'SELL') // buy & sell only; hides any legacy rental rows
           .order('created_at', { ascending: false })
           .limit(100);
 
         let soldQuery = supabase
           .from('listings')
           .select(
-            `id, seller_id, title, description, listing_type, category, price, rent_period,
-             security_deposit, city, locality, latitude, longitude, images, status, created_at,
+            `id, seller_id, title, description, category, price,
+             city, locality, latitude, longitude, images, status, created_at,
              profiles:seller_id (full_name, city)`
           )
           .eq('status', 'SOLD')
+          .eq('listing_type', 'SELL')
           .order('created_at', { ascending: false })
           .limit(12);
 
-        if (typeFilter !== 'ALL') query = query.eq('listing_type', typeFilter);
         if (selectedCategory !== 'All') {
           query = query.eq('category', selectedCategory);
           soldQuery = soldQuery.eq('category', selectedCategory);
         }
-        if (typeFilter !== 'ALL') soldQuery = soldQuery.eq('listing_type', typeFilter);
         if (minPrice.trim()) {
           query = query.gte('price', Number(minPrice));
           soldQuery = soldQuery.gte('price', Number(minPrice));
@@ -261,7 +259,7 @@ export default function HomeScreen() {
         setRefreshing(false);
       }
     },
-    [typeFilter, selectedCategory, minPrice, maxPrice, cityFilter, debouncedQuery, t]
+    [selectedCategory, minPrice, maxPrice, cityFilter, debouncedQuery, t]
   );
 
   useFocusEffect(
@@ -518,13 +516,7 @@ export default function HomeScreen() {
             )}
             <View className="absolute left-2 top-2 rounded-full bg-black/70 px-2 py-1">
               <Text className="text-[10px] font-bold text-white">
-                {listing.status === 'SOLD'
-                  ? t('sold')
-                  : listing.status === 'RENTED'
-                    ? t('rented')
-                    : listing.listing_type === 'RENT'
-                      ? t('rent')
-                      : t('forSale')}
+                {listing.status === 'SOLD' ? t('sold') : t('forSale')}
               </Text>
             </View>
             {itemMetrics?.is_verified && (
@@ -704,28 +696,6 @@ export default function HomeScreen() {
       </TourTarget>
 
       <View className="mt-3 flex-row px-4">
-        <TourTarget id="home-offer-type" style={{ flexDirection: 'row' }}>
-            {([
-              ['ALL', t('all')],
-              ['SELL', t('buy')],
-              ['RENT', t('rent')],
-            ] as const).map(([key, label]) => {
-              const active = typeFilter === key;
-              return (
-                <TouchableOpacity
-                  key={key}
-                  onPress={() => setTypeFilter(key)}
-                  className={`mr-2 rounded-full px-4 py-2 ${active ? 'bg-emerald-500' : 'bg-[#1f2937]'}`}
-                  accessibilityRole="button"
-                  accessibilityState={{ selected: active }}
-                >
-                  <Text className={`text-xs font-bold ${active ? 'text-[#052e16]' : 'text-gray-300'}`}>
-                    {label}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
-          </TourTarget>
         <View className="flex-1" />
         <TouchableOpacity
           onPress={() => setGridView((current) => !current)}
@@ -953,33 +923,6 @@ export default function HomeScreen() {
                 <Ionicons name="close" size={22} color="#d1d5db" />
               </TouchableOpacity>
             </View>
-            <Text className="mb-2 text-xs font-semibold text-gray-300">{t('listingType')}</Text>
-            <View className="mb-4 flex-row">
-              {([
-                ['ALL', t('all')],
-                ['SELL', t('sell')],
-                ['RENT', t('rent')],
-              ] as const).map(([key, label]) => {
-                const active = typeFilter === key;
-                return (
-                  <TouchableOpacity
-                    key={key}
-                    onPress={() => setTypeFilter(key)}
-                    className="mr-2 flex-1 items-center rounded-xl border py-3"
-                    style={{
-                      backgroundColor: active ? `${theme.primary}1A` : theme.background,
-                      borderColor: active ? theme.primary : theme.border,
-                    }}
-                    accessibilityRole="button"
-                    accessibilityState={{ selected: active }}
-                  >
-                    <Text className="text-xs font-bold" style={{ color: active ? theme.primary : '#d1d5db' }}>
-                      {label}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
             <Text className="mb-2 text-xs font-semibold text-gray-300">{t('sortBy')}</Text>
             <View className="mb-4 flex-row flex-wrap">
               {([
@@ -1062,7 +1005,6 @@ export default function HomeScreen() {
                   setMinPrice('');
                   setMaxPrice('');
                   setCityFilter('');
-                  setTypeFilter('ALL');
                   setSortOrder('newest');
                   setVerifiedOnly(false);
                 }}

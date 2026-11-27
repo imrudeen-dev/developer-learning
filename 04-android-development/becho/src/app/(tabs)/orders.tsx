@@ -79,7 +79,7 @@ function ListingManagementCard({
   const router = useRouter();
   const { theme, t } = useAppPreferences();
   const statusLabel =
-    listing.status === 'ACTIVE' ? t('active') : listing.status === 'SOLD' ? t('sold') : t('rented');
+    listing.status === 'ACTIVE' ? t('active') : t('sold');
 
   return (
     <View
@@ -108,7 +108,7 @@ function ListingManagementCard({
         <View>
           <View className="mb-2 flex-row items-center justify-between">
             <Text className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">
-              {listing.listing_type === 'RENT' ? t('forRent') : t('forSale')}
+              {t('forSale')}
             </Text>
             <View
               className="rounded-full px-2 py-1"
@@ -221,22 +221,22 @@ export default function OrdersScreen() {
       const [savedResult, offersResult, dealsResult, listingsResult, reviewsResult] = await Promise.all([
         supabase
           .from('saved_listings')
-          .select('listing_id, created_at, listing:listing_id (id, seller_id, title, description, listing_type, category, price, rent_period, security_deposit, city, locality, latitude, longitude, images, status, created_at)')
+          .select('listing_id, created_at, listing:listing_id (id, seller_id, title, description, category, price, city, locality, latitude, longitude, images, status, created_at)')
           .eq('user_id', user.id)
           .order('created_at', { ascending: false }),
         supabase
           .from('offers')
-          .select('id, listing_id, buyer_id, seller_id, amount, status, created_at, listing:listing_id (id, seller_id, title, description, listing_type, category, price, rent_period, security_deposit, city, locality, latitude, longitude, images, status, created_at)')
+          .select('id, listing_id, buyer_id, seller_id, amount, status, created_at, listing:listing_id (id, seller_id, title, description, category, price, city, locality, latitude, longitude, images, status, created_at)')
           .or(`buyer_id.eq.${user.id},seller_id.eq.${user.id}`)
           .order('created_at', { ascending: false }),
         supabase
           .from('deals')
-          .select('id, listing_id, buyer_id, seller_id, amount, status, created_at, listing:listing_id (id, seller_id, title, description, listing_type, category, price, rent_period, security_deposit, city, locality, latitude, longitude, images, status, created_at)')
+          .select('id, listing_id, buyer_id, seller_id, amount, status, created_at, listing:listing_id (id, seller_id, title, description, category, price, city, locality, latitude, longitude, images, status, created_at)')
           .or(`buyer_id.eq.${user.id},seller_id.eq.${user.id}`)
           .order('created_at', { ascending: false }),
         supabase
           .from('listings')
-          .select('id, seller_id, title, description, listing_type, category, price, rent_period, security_deposit, city, locality, latitude, longitude, images, status, created_at')
+          .select('id, seller_id, title, description, category, price, city, locality, latitude, longitude, images, status, created_at')
           .eq('seller_id', user.id)
           .order('created_at', { ascending: false })
           .limit(100),
@@ -316,11 +316,7 @@ export default function OrdersScreen() {
         return [{
           key: deal.id,
           listing: deal.listing,
-          detail: `${deal.status.replace('_', ' ')} · ${formatListingPrice({
-            listing_type: deal.listing.listing_type,
-            price: deal.amount,
-            rent_period: deal.listing.rent_period,
-          })}`,
+          detail: `${deal.status.replace('_', ' ')} · ${formatListingPrice({ price: deal.amount })}`,
           action,
           dealId: deal.id,
         }];
@@ -427,7 +423,6 @@ export default function OrdersScreen() {
     router.push({
       pathname: '/(tabs)/post',
       params: {
-        type: listing.listing_type,
         title: listing.title,
         price: String(listing.price),
         category: listing.category,

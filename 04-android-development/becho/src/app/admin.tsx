@@ -31,8 +31,7 @@ interface VerificationRequest {
 interface ManagedListing {
   id: string;
   title: string;
-  listing_type: 'SELL' | 'RENT';
-  status: 'ACTIVE' | 'SOLD' | 'RENTED';
+  status: 'ACTIVE' | 'SOLD';
   city: string;
   price: number;
   created_at: string;
@@ -51,7 +50,6 @@ const FLAG_LABELS: Omit<PlatformFlag, 'enabled'>[] = [
   { key: 'allow_listings', title: 'New listings', description: 'Allow sellers to publish listings.' },
   { key: 'chat_enabled', title: 'Buyer and seller chat', description: 'Allow conversations from listing pages.' },
   { key: 'offers_enabled', title: 'Offers', description: 'Allow buyers to send and negotiate offers.' },
-  { key: 'rentals_enabled', title: 'Rentals', description: 'Allow rent listings across the marketplace.' },
   { key: 'require_verified_sellers', title: 'Verified sellers only', description: 'Require seller approval before publishing.' },
 ];
 
@@ -88,7 +86,7 @@ export default function AdminControlPanel() {
         supabase.from('verified_sellers').select('user_id, status').eq('status', 'pending'),
         supabase
           .from('listings')
-          .select('id, title, listing_type, status, city, price, created_at')
+          .select('id, title, status, city, price, created_at')
           .order('created_at', { ascending: false })
           .limit(50),
         supabase
@@ -113,8 +111,7 @@ export default function AdminControlPanel() {
         (listingsResult.data ?? []).map((row) => ({
           id: String(row.id),
           title: String(row.title),
-          listing_type: row.listing_type === 'RENT' ? 'RENT' : 'SELL',
-          status: row.status === 'SOLD' || row.status === 'RENTED' ? row.status : 'ACTIVE',
+          status: row.status === 'SOLD' ? 'SOLD' : 'ACTIVE',
           city: String(row.city),
           price: Number(row.price),
           created_at: String(row.created_at),
@@ -210,12 +207,7 @@ export default function AdminControlPanel() {
 
   const updateListingStatus = async (listing: ManagedListing) => {
     if (!isPlatformOwner(user)) return;
-    const status =
-      listing.status === 'ACTIVE'
-        ? listing.listing_type === 'RENT'
-          ? 'RENTED'
-          : 'SOLD'
-        : 'ACTIVE';
+    const status = listing.status === 'ACTIVE' ? 'SOLD' : 'ACTIVE';
     setSavingListingId(listing.id);
     try {
       const { error } = await supabase
@@ -240,15 +232,14 @@ export default function AdminControlPanel() {
     try {
       const { data, error } = await supabase
         .from('listings')
-        .select('id, title, listing_type, status, city, price, created_at')
+        .select('id, title, status, city, price, created_at')
         .order('created_at', { ascending: false })
         .range(listings.length, listings.length + 49);
       if (error) throw error;
       const nextListings = (data ?? []).map((row) => ({
         id: String(row.id),
         title: String(row.title),
-        listing_type: row.listing_type === 'RENT' ? 'RENT' as const : 'SELL' as const,
-        status: row.status === 'SOLD' || row.status === 'RENTED' ? row.status : 'ACTIVE' as const,
+        status: row.status === 'SOLD' ? 'SOLD' as const : 'ACTIVE' as const,
         city: String(row.city),
         price: Number(row.price),
         created_at: String(row.created_at),
@@ -501,7 +492,7 @@ export default function AdminControlPanel() {
             >
               <View className="mr-3 h-10 w-10 items-center justify-center rounded-xl bg-emerald-500/10">
                 <Ionicons
-                  name={listing.listing_type === 'RENT' ? 'key-outline' : 'pricetag-outline'}
+                  name="pricetag-outline"
                   size={18}
                   color={BECHO_COLORS.primary}
                 />

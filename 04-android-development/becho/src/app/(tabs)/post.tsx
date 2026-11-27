@@ -16,7 +16,7 @@ import {
 } from 'react-native';
 import { AppText as Text, AppTextInput as TextInput } from '../../components/app-text';
 import { isPlatformOwner, useAuth } from '../../lib/auth-context';
-import { BECHO_CATEGORIES, RENT_PERIODS } from '../../lib/constants';
+import { BECHO_CATEGORIES } from '../../lib/constants';
 import { usePlatformSettings } from '../../lib/platform-settings';
 import { supabase } from '../../lib/supabase';
 import { BECHO_COLORS } from '../../lib/theme';
@@ -34,15 +34,11 @@ export default function PostListingScreen() {
   const { user, profile } = useAuth();
   const { settings } = usePlatformSettings();
   const params = useLocalSearchParams<{
-    type?: string;
     title?: string;
     price?: string;
     category?: string;
   }>();
   const [step, setStep] = useState(0);
-  const [listingType, setListingType] = useState<'SELL' | 'RENT'>(
-    params.type === 'RENT' ? 'RENT' : 'SELL'
-  );
   const [category, setCategory] = useState<string>(
     BECHO_CATEGORIES.includes(params.category as (typeof BECHO_CATEGORIES)[number])
       ? (params.category as string)
@@ -51,8 +47,6 @@ export default function PostListingScreen() {
   const [title, setTitle] = useState(params.title ?? '');
   const [description, setDescription] = useState('');
   const [price, setPrice] = useState(params.price ?? '');
-  const [rentPeriod, setRentPeriod] = useState<'DAY' | 'WEEK' | 'MONTH'>('DAY');
-  const [securityDeposit, setSecurityDeposit] = useState('');
   const [city, setCity] = useState(profile?.city ?? 'Chennai');
   const [locality, setLocality] = useState('');
   const [coordinates, setCoordinates] = useState<{ latitude: number; longitude: number } | null>(null);
@@ -63,10 +57,6 @@ export default function PostListingScreen() {
   useEffect(() => {
     if (profile?.city) setCity(profile.city);
   }, [profile?.city]);
-
-  useEffect(() => {
-    if (!settings.rentals_enabled && listingType === 'RENT') setListingType('SELL');
-  }, [settings.rentals_enabled, listingType]);
 
   const pickPhotos = async () => {
     if (photos.length >= 5) {
@@ -149,13 +139,6 @@ export default function PostListingScreen() {
       Alert.alert('Add a location', 'Enter the city where the item is available.');
       return false;
     }
-    if (step === 0 && listingType === 'RENT' && securityDeposit.trim()) {
-      const deposit = Number(securityDeposit);
-      if (!Number.isFinite(deposit) || deposit < 0) {
-        Alert.alert('Check the deposit', 'Enter a valid refundable deposit amount.');
-        return false;
-      }
-    }
     return true;
   };
 
@@ -163,10 +146,6 @@ export default function PostListingScreen() {
     if (!user || submitting) return;
     if (!settings.allow_listings && !isPlatformOwner(user)) {
       Alert.alert('Listings paused', 'The platform is not accepting new listings right now.');
-      return;
-    }
-    if (listingType === 'RENT' && !settings.rentals_enabled) {
-      Alert.alert('Rentals paused', 'The platform is not accepting rental listings right now.');
       return;
     }
     if (!city.trim() || !title.trim() || !Number.isFinite(Number(price)) || Number(price) <= 0) {
@@ -215,14 +194,11 @@ export default function PostListingScreen() {
           seller_id: user.id,
           title: title.trim(),
           description: description.trim() || null,
-          listing_type: listingType,
+          listing_type: 'SELL', // Becho is buy & sell only
           category,
           price: Number(price),
-          rent_period: listingType === 'RENT' ? rentPeriod : null,
-          security_deposit:
-            listingType === 'RENT' && securityDeposit.trim()
-              ? Number(securityDeposit)
-              : 0,
+          rent_period: null,
+          security_deposit: 0,
           city: city.trim(),
           locality: locality.trim() || null,
           latitude: coordinates?.latitude ?? null,
@@ -278,7 +254,7 @@ export default function PostListingScreen() {
         <View className="h-16 w-16 items-center justify-center rounded-2xl bg-emerald-500/15">
           <Ionicons name="storefront-outline" size={30} color={BECHO_COLORS.primary} />
         </View>
-        <Text className="mt-5 text-xl font-bold text-white">Sell or rent with Becho</Text>
+        <Text className="mt-5 text-xl font-bold text-white">Sell with Becho</Text>
         <Text className="mt-2 text-center text-sm leading-5 text-gray-400">
           Sign in to publish a listing and talk directly with local buyers.
         </Text>
@@ -336,28 +312,6 @@ export default function PostListingScreen() {
 
         {step === 0 && (
           <View className="rounded-2xl border border-white/10 bg-[#111827] p-4">
-            <Text className="mb-2 text-sm font-bold text-white">What are you listing?</Text>
-            <View className="mb-5 flex-row rounded-xl bg-[#1f2937] p-1">
-              {([
-                ['SELL', 'Sell'],
-                ...(settings.rentals_enabled ? [['RENT', 'Rent'] as const] : []),
-              ] as const).map(([type, label]) => (
-                <TouchableOpacity
-                  key={type}
-                  onPress={() => setListingType(type)}
-                  className={`mr-1 flex-1 items-center rounded-lg py-2.5 ${
-                    listingType === type ? 'bg-emerald-500' : ''
-                  }`}
-                  accessibilityRole="button"
-                  accessibilityState={{ selected: listingType === type }}
-                >
-                  <Text className={`text-sm font-bold ${listingType === type ? 'text-[#052e16]' : 'text-gray-300'}`}>
-                    {label}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-
             <Text className="mb-2 text-xs font-semibold text-gray-300">Category</Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} className="mb-4">
               {BECHO_CATEGORIES.map((item) => (
@@ -389,7 +343,7 @@ export default function PostListingScreen() {
             <TextInput
               value={description}
               onChangeText={setDescription}
-              placeholder="Condition, age, included accessories, or rental terms…"
+              placeholder="Condition, age, included accessories…"
               placeholderTextColor={BECHO_COLORS.textMuted}
               multiline
               maxLength={1200}
@@ -398,7 +352,7 @@ export default function PostListingScreen() {
               accessibilityLabel="Listing description"
             />
             <Text className="mb-2 text-xs font-semibold text-gray-300">
-              {listingType === 'SELL' ? 'Price (₹)' : 'Rent per period (₹)'}
+              Price (₹)
             </Text>
             <TextInput
               value={price}
@@ -409,38 +363,6 @@ export default function PostListingScreen() {
               className="rounded-xl border border-white/10 bg-[#1f2937] px-3 py-3 text-white"
               accessibilityLabel="Price"
             />
-            {listingType === 'RENT' && (
-              <>
-                <Text className="mb-2 mt-4 text-xs font-semibold text-gray-300">Billing period</Text>
-                <View className="flex-row">
-                  {RENT_PERIODS.map((period) => (
-                    <TouchableOpacity
-                      key={period.value}
-                      onPress={() => setRentPeriod(period.value)}
-                      className={`mr-2 rounded-full border px-3 py-2 ${
-                        rentPeriod === period.value
-                          ? 'border-sky-400 bg-sky-400/15'
-                          : 'border-white/10'
-                      }`}
-                    >
-                      <Text className={`text-xs ${rentPeriod === period.value ? 'text-sky-300' : 'text-gray-400'}`}>
-                        {period.label}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-                <Text className="mb-2 mt-4 text-xs font-semibold text-gray-300">Security deposit (optional)</Text>
-                <TextInput
-                  value={securityDeposit}
-                  onChangeText={setSecurityDeposit}
-                  placeholder="0"
-                  placeholderTextColor={BECHO_COLORS.textMuted}
-                  keyboardType="decimal-pad"
-                  className="rounded-xl border border-white/10 bg-[#1f2937] px-3 py-3 text-white"
-                  accessibilityLabel="Security deposit"
-                />
-              </>
-            )}
           </View>
         )}
 
@@ -522,7 +444,6 @@ export default function PostListingScreen() {
             )}
             <Text className="text-lg font-extrabold text-emerald-400">
               ₹{Number(price || 0).toLocaleString('en-IN')}
-              {listingType === 'RENT' ? ` / ${rentPeriod.toLowerCase()}` : ''}
             </Text>
             <Text className="mt-1 text-base font-bold text-white">{title || 'Your listing title'}</Text>
             <Text className="mt-2 text-xs text-gray-400">{category} · {city || 'Add city'}</Text>

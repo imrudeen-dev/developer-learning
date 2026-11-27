@@ -2,7 +2,7 @@
   "expo": {
     "name": "Becho Enterprise",
     "slug": "becho",
-    "version": "3.0.0",
+    "version": "4.0.2",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "becho",
@@ -19,7 +19,7 @@
       },
       "backgroundColor": "#0b0f19",
       "package": "com.imrudeen.becho",
-      "versionCode": 4
+      "versionCode": 6
     },
     "plugins": [
       "expo-router",
